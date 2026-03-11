@@ -1,0 +1,288 @@
+// This is your Prisma schema file
+// Multi-tenant ready with clinic_id on all main tables
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── CLINICA (TENANT) ────────────────────────────────────────────────────────
+model Clinica {
+  id        String   @id @default(cuid())
+  nome      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  usuarios  Usuario[]
+  leads     Lead[]
+  clientes  Cliente[]
+  conversas Conversa[]
+  kanbanColunas KanbanColuna[]
+  metas     Meta[]
+  configuracoes ConfiguracaoClinica?
+  mensagens Mensagem[]
+  transferencias Transferencia[]
+  notificacoes Notificacao[]
+  agendamentos MensagemAgendada[]
+  terapias  ClienteTerapia[]
+  sessoes   Sessao[]
+  documentos Documento[]
+}
+
+model ConfiguracaoClinica {
+  id                    String   @id @default(cuid())
+  clinicaId             String   @unique
+  diasInatividade       Int      @default(30)
+  slaMinutos            Int      @default(60)
+  whatsappConectado     Boolean  @default(false)
+  whatsappSessao        String?
+  clinica               Clinica  @relation(fields: [clinicaId], references: [id])
+  updatedAt             DateTime @updatedAt
+}
+
+// ─── USUÁRIOS / AUTH ─────────────────────────────────────────────────────────
+model Usuario {
+  id         String      @id @default(cuid())
+  clinicaId  String
+  nome       String
+  email      String
+  senha      String
+  perfil     String      @default("ATENDENTE") // 'ADMIN', 'VENDEDOR', 'ATENDENTE'
+  ativo      Boolean     @default(true)
+  avatar     String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  clinica         Clinica       @relation(fields: [clinicaId], references: [id])
+  conversasAtrib  Conversa[]    @relation("AtendentePrincipal")
+  transferDe      Transferencia[] @relation("TransferidoPor")
+  transferPara    Transferencia[] @relation("TransferidoPara")
+  mensagensAgend  MensagemAgendada[]
+  notificacoes    Notificacao[]
+
+  @@unique([clinicaId, email])
+}
+
+// ─── LEADS / CONVERSAS ───────────────────────────────────────────────────────
+model Lead {
+  id          String      @id @default(cuid())
+  clinicaId   String
+  nome        String
+  telefone    String
+  email       String?
+  foto        String?
+  tags        String      @default("") // JSON string de tags
+  prioridade  String      @default("NORMAL") // 'BAIXA', 'NORMAL', 'ALTA', 'URGENTE'
+  valor       Float?      @default(0)
+  busca       String?
+  origem      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  clinica   Clinica    @relation(fields: [clinicaId], references: [id])
+  conversa  Conversa?
+  cliente   Cliente?
+
+  @@unique([clinicaId, telefone])
+}
+
+model Conversa {
+  id               String    @id @default(cuid())
+  clinicaId        String
+  leadId           String    @unique
+  atendenteId      String?
+  kanbanAtenStat   String    @default("fila_espera")  // coluna do kanban atendente
+  kanbanVendStat   String?   // coluna do kanban vendas
+  ultimaMensagem   String?
+  ultimaMensagemAt DateTime?
+  naoLidas         Int       @default(0)
+  encerrada        Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  clinica       Clinica         @relation(fields: [clinicaId], references: [id])
+  lead          Lead            @relation(fields: [leadId], references: [id])
+  atendente     Usuario?        @relation("AtendentePrincipal", fields: [atendenteId], references: [id])
+  mensagens     Mensagem[]
+  transferencias Transferencia[]
+  agendamentos  MensagemAgendada[]
+}
+
+model Mensagem {
+  id          String        @id @default(cuid())
+  clinicaId   String
+  conversaId  String
+  conteudo    String
+  tipo        String        @default("TEXTO") // 'TEXTO', 'IMAGEM', 'AUDIO', 'VIDEO', 'DOCUMENTO', 'SISTEMA'
+  de          String        // 'system' | 'usuario' | telefone do lead
+  lida        Boolean       @default(false)
+  timestamp   DateTime      @default(now())
+
+  clinica     Clinica       @relation(fields: [clinicaId], references: [id])
+  conversa    Conversa      @relation(fields: [conversaId], references: [id])
+}
+
+model Transferencia {
+  id            String   @id @default(cuid())
+  clinicaId     String
+  conversaId    String
+  dePessoaId    String
+  paraPessoaId  String
+  resumo        String
+  orientacoes   String?
+  timestamp     DateTime @default(now())
+
+  clinica     Clinica   @relation(fields: [clinicaId], references: [id])
+  conversa    Conversa  @relation(fields: [conversaId], references: [id])
+  de          Usuario   @relation("TransferidoPor", fields: [dePessoaId], references: [id])
+  para        Usuario   @relation("TransferidoPara", fields: [paraPessoaId], references: [id])
+}
+
+// ─── KANBAN ──────────────────────────────────────────────────────────────────
+model KanbanColuna {
+  id         String      @id @default(cuid())
+  clinicaId  String
+  tipo       String      @default("ATENDIMENTO") // 'ATENDIMENTO', 'VENDAS'
+  nome       String
+  cor        String      @default("#1A73E8")
+  ordem      Int         @default(0)
+  slug       String
+  limiteCards Int?
+  arquivada  Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+
+  clinica  Clinica       @relation(fields: [clinicaId], references: [id])
+
+  @@unique([clinicaId, tipo, slug])
+}
+
+// ─── CLIENTES ────────────────────────────────────────────────────────────────
+model Cliente {
+  id                String        @id @default(cuid())
+  clinicaId         String
+  leadId            String?       @unique
+  // Dados pessoais
+  nomePaciente      String
+  nomeResponsavel   String?
+  telefone          String
+  email             String?
+  cpfResponsavel    String?
+  dataNascimento    DateTime?
+  cidDiagnostico    String?       // CID code
+  diagnosticoTexto  String?
+  // Status
+  ativo             Boolean       @default(true)
+  ultimoContato     DateTime?
+  observacoes       String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  clinica   Clinica         @relation(fields: [clinicaId], references: [id])
+  lead      Lead?           @relation(fields: [leadId], references: [id])
+  terapias  ClienteTerapia[]
+  sessoes   Sessao[]
+  documentos Documento[]
+}
+
+model ClienteTerapia {
+  id              String         @id @default(cuid())
+  clinicaId       String
+  clienteId       String
+  especialidade   String // 'FONOAUDIOLOGIA', 'PSICOLOGIA', etc
+  profissional    String?
+  frequenciaSemana Int?
+  dataInicio      DateTime?
+  tipoPagamento   String  @default("PARTICULAR") // 'PARTICULAR', 'CONVENIO', 'MISTO'
+  // Convênio
+  convenioNome    String?
+  convenioCarteira String?
+  convenioValidade DateTime?
+  covenioPlanoCob  String?
+  // Particular
+  valorSessao     Float?
+  formaPagamento  String?
+
+  clinica  Clinica  @relation(fields: [clinicaId], references: [id])
+  cliente  Cliente  @relation(fields: [clienteId], references: [id])
+}
+
+model Sessao {
+  id          String       @id @default(cuid())
+  clinicaId   String
+  clienteId   String
+  terapia     String
+  data        DateTime
+  valor       Float?
+  status      String @default("PENDENTE") // 'PAGO', 'PENDENTE', 'INADIMPLENTE', 'CANCELADO'
+  observacoes String?
+  createdAt   DateTime     @default(now())
+
+  clinica  Clinica  @relation(fields: [clinicaId], references: [id])
+  cliente  Cliente  @relation(fields: [clienteId], references: [id])
+}
+
+model Documento {
+  id          String   @id @default(cuid())
+  clinicaId   String
+  clienteId   String
+  nome        String
+  tipo        String   // LAUDO, RELATORIO, AUTORIZACAO
+  url         String
+  createdAt   DateTime @default(now())
+
+  clinica  Clinica  @relation(fields: [clinicaId], references: [id])
+  cliente  Cliente  @relation(fields: [clienteId], references: [id])
+}
+
+// ─── AGENDAMENTOS ────────────────────────────────────────────────────────────
+model MensagemAgendada {
+  id           String              @id @default(cuid())
+  clinicaId    String
+  conversaId   String?
+  usuarioId    String
+  telefone     String
+  conteudo     String
+  agendadoPara DateTime
+  status       String   @default("PENDENTE") // 'PENDENTE', 'ENVIADO', 'FALHOU', 'CANCELADO'
+  tentativas   Int                 @default(0)
+  erroMsg      String?
+  enviadoEm    DateTime?
+  createdAt    DateTime            @default(now())
+
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id])
+  conversa  Conversa? @relation(fields: [conversaId], references: [id])
+  clinica   Clinica   @relation(fields: [clinicaId], references: [id])
+}
+
+// ─── NOTIFICAÇÕES ────────────────────────────────────────────────────────────
+model Notificacao {
+  id          String   @id @default(cuid())
+  clinicaId   String
+  usuarioId   String
+  titulo      String
+  mensagem    String
+  tipo        String   @default("info")  // info | warning | error | success
+  lida        Boolean  @default(false)
+  link        String?
+  createdAt   DateTime @default(now())
+
+  clinica  Clinica  @relation(fields: [clinicaId], references: [id])
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id])
+}
+
+// ─── METAS ───────────────────────────────────────────────────────────────────
+model Meta {
+  id         String   @id @default(cuid())
+  clinicaId  String
+  vendedorId String?
+  mes        Int
+  ano        Int
+  valorMeta  Float
+  createdAt  DateTime @default(now())
+
+  clinica  Clinica  @relation(fields: [clinicaId], references: [id])
+}
