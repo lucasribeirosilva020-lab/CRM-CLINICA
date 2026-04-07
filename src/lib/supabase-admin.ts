@@ -15,4 +15,4 @@ export const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
             persistSession: false
         }
     })
-    : null;
+    : null as any;
