@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
             email: usuario.email,
         };
 
+        console.log('[AUTH LOGIN] Gerando tokens para:', payload.email);
         const accessToken = await signAccessToken(payload);
         const refreshToken = await signRefreshToken(payload);
 
@@ -72,8 +73,16 @@ export async function POST(req: NextRequest) {
         });
 
         return response;
-    } catch (error) {
-        console.error('[AUTH LOGIN]', error);
-        return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
+    } catch (error: any) {
+        console.error('[AUTH LOGIN] CRITICAL ERROR:', {
+            message: error.message,
+            stack: error.stack,
+            env: {
+                hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+                hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+                hasJwtSecret: !!process.env.JWT_SECRET
+            }
+        });
+        return NextResponse.json({ error: `Erro interno: ${error.message || 'desconhecido'}` }, { status: 500 });
     }
 }
