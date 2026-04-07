@@ -14,6 +14,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Email e senha são obrigatórios' }, { status: 400 });
         }
 
+        if (!supabaseAdmin) {
+            console.error('[AUTH LOGIN] supabaseAdmin is NULL. Check environment variables.');
+            return NextResponse.json({ error: 'Erro de configuração: Chaves do banco de dados não encontradas no servidor.' }, { status: 500 });
+        }
+
         const { data: usuario, error: supError } = await supabaseAdmin
             .from('Usuario')
             .select('*, clinica:Clinica(*)')
