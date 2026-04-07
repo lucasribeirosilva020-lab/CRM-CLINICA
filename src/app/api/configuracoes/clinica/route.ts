@@ -1,25 +1,28 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import { withAuth } from '@/lib/api-middleware';
 
-export const GET = withAuth(async (req, { user }: any) => {
+export const GET = withAuth(async (req: NextRequest, { user }: any) => {
     try {
         const clinicaId = user.clinicaId;
 
-        const clinica = await prisma.clinica.findUnique({
-            where: { id: clinicaId },
-            include: { configuracoes: true }
-        });
+        const { data: clinica, error: cError } = await supabaseAdmin
+            .from('Clinica')
+            .select('nome, configuracoes:ConfiguracaoClinica(*)')
+            .eq('id', clinicaId)
+            .single();
 
-        if (!clinica) {
+        if (cError || !clinica) {
             return NextResponse.json({ success: false, error: 'Clínica não encontrada' }, { status: 404 });
         }
+
+        const config = (clinica.configuracoes as any)?.[0];
 
         return NextResponse.json({
             success: true,
             data: {
                 nome: clinica.nome,
-                configuracoes: clinica.configuracoes || {
+                configuracoes: config || {
                     slaMinutos: 60,
                     diasInatividade: 30
                 }
@@ -31,32 +34,31 @@ export const GET = withAuth(async (req, { user }: any) => {
     }
 });
 
-export const PUT = withAuth(async (req, { user }: any) => {
+export const PUT = withAuth(async (req: NextRequest, { user }: any) => {
     try {
         const clinicaId = user.clinicaId;
         const { nome, slaMinutos, diasInatividade } = await req.json();
+        const nowDate = new Date().toISOString();
 
-        // Só ADMIN pode editar nome da clínica? Geralmente sim.
-        // Mas vamos permitir por enquanto se tiver o clinicaId correto.
+        // 1. Atualiza nome da clínica
+        const { error: u1Error } = await supabaseAdmin
+            .from('Clinica')
+            .update({ nome, updatedAt: nowDate })
+            .eq('id', clinicaId);
 
-        await prisma.$transaction([
-            prisma.clinica.update({
-                where: { id: clinicaId },
-                data: { nome }
-            }),
-            prisma.configuracaoClinica.upsert({
-                where: { clinicaId },
-                create: {
-                    clinicaId,
-                    slaMinutos: Number(slaMinutos),
-                    diasInatividade: Number(diasInatividade)
-                },
-                update: {
-                    slaMinutos: Number(slaMinutos),
-                    diasInatividade: Number(diasInatividade)
-                }
-            })
-        ]);
+        if (u1Error) throw u1Error;
+
+        // 2. Upsert configurações
+        const { error: u2Error } = await supabaseAdmin
+            .from('ConfiguracaoClinica')
+            .upsert({
+                clinicaId,
+                slaMinutos: Number(slaMinutos),
+                diasInatividade: Number(diasInatividade),
+                updatedAt: nowDate
+            }, { onConflict: 'clinicaId' });
+
+        if (u2Error) throw u2Error;
 
         return NextResponse.json({ success: true });
     } catch (error) {
@@ -64,3 +66,4 @@ export const PUT = withAuth(async (req, { user }: any) => {
         return NextResponse.json({ success: false, error: 'Erro interno' }, { status: 500 });
     }
 });
+

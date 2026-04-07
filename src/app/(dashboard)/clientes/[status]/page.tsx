@@ -6,12 +6,14 @@ import { cn, getAvatarUrl, formatarMoeda, ESPECIALIDADES_MAP, CID_OPTIONS } from
 import {
     Search, Filter, Plus, ChevronRight, X, Check, AlertTriangle,
     Phone, Mail, Calendar, Heart, DollarSign, FileText, MessageSquare,
-    Download, Upload, ExternalLink
+    Download, Upload, ExternalLink, Shield, Trash2
 } from 'lucide-react';
 import ClienteModal from '@/components/modals/ClienteModal';
 import DropdownMenu from '@/components/ui/DropdownMenu';
 import { useRouter } from 'next/navigation';
 import { exportToCSV, exportToExcel } from '@/lib/export-utils';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import { toast } from 'react-hot-toast';
 
 type StatusFilter = 'TODOS' | 'ATIVO' | 'INATIVO';
 
@@ -26,8 +28,11 @@ interface Cliente {
     ativo: boolean;
     terapias: string[];
     tipoPagamento: 'PARTICULAR' | 'CONVENIO' | 'MISTO';
+    valorMensal?: number;
     convenioNome?: string;
     convenioValidade?: string;
+    convenioCarteira?: string;
+    terapiasOutros?: string;
     totalGasto: number;
     ultimoContato?: string;
     profissional?: string;
@@ -39,7 +44,7 @@ const CLIENTES_MOCK: Cliente[] = [
         telefone: '(48) 99123-4567', email: 'mariana@email.com',
         diagnostico: 'TEA (Autismo)', cidCode: 'F84.0', ativo: true,
         terapias: ['FONOAUDIOLOGIA', 'TERAPIA_OCUPACIONAL'],
-        tipoPagamento: 'CONVENIO', convenioNome: 'Unimed', convenioValidade: '2025-12-31',
+        tipoPagamento: 'CONVENIO', valorMensal: 1200, convenioNome: 'Unimed', convenioValidade: '2025-12-31', convenioCarteira: '001928374',
         totalGasto: 18400, ultimoContato: new Date(Date.now() - 3 * 24 * 3600000).toISOString(),
         profissional: 'Dra. Ana',
     },
@@ -48,7 +53,7 @@ const CLIENTES_MOCK: Cliente[] = [
         telefone: '(48) 99234-5678', email: 'ricardo@email.com',
         diagnostico: 'TDAH', cidCode: 'F90.0', ativo: true,
         terapias: ['PSICOLOGIA', 'PSICOPEDAGOGIA'],
-        tipoPagamento: 'PARTICULAR',
+        tipoPagamento: 'PARTICULAR', valorMensal: 800,
         totalGasto: 9600, ultimoContato: new Date(Date.now() - 1 * 24 * 3600000).toISOString(),
         profissional: 'Dr. Paulo',
     },
@@ -56,16 +61,16 @@ const CLIENTES_MOCK: Cliente[] = [
         id: '3', nomePaciente: 'Gabriel Oliveira Costa', nomeResponsavel: 'Fernanda Costa',
         telefone: '(48) 99345-6789',
         diagnostico: 'Dislexia', cidCode: 'F81.0', ativo: false,
-        terapias: ['PSICOPEDAGOGIA'],
-        tipoPagamento: 'PARTICULAR',
+        terapias: ['PSICOPEDAGOGIA', 'OUTROS'], terapiasOutros: 'Acupuntura',
+        tipoPagamento: 'PARTICULAR', valorMensal: 600,
         totalGasto: 4800, ultimoContato: new Date(Date.now() - 45 * 24 * 3600000).toISOString(),
     },
     {
         id: '4', nomePaciente: 'Valentina Ramos Lima', nomeResponsavel: 'Juliana Lima',
         telefone: '(48) 99456-7890', email: 'juliana@email.com',
         diagnostico: 'TEA + TDAH', cidCode: 'F84.0', ativo: true,
-        terapias: ['FONOAUDIOLOGIA', 'ABA', 'TERAPIA_OCUPACIONAL'],
-        tipoPagamento: 'MISTO', convenioNome: 'SulAmérica',
+        terapias: ['FONOAUDIOLOGIA', 'MUSICOTERAPIA', 'ABA', 'TERAPIA_OCUPACIONAL'],
+        tipoPagamento: 'MISTO', valorMensal: 3500, convenioNome: 'SulAmérica', convenioCarteira: '6543210',
         totalGasto: 27500, ultimoContato: new Date(Date.now() - 2 * 24 * 3600000).toISOString(),
         profissional: 'Equipe multidisciplinar',
     },
@@ -107,13 +112,13 @@ function ClienteCard({ cliente, onClick }: { cliente: Cliente; onClick: () => vo
 
                     <div className="flex flex-wrap gap-1 mb-2">
                         {cliente.cidCode && (
-                            <span className="text-[9px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded-md font-semibold">
+                            <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-md font-semibold border border-primary/20">
                                 CID {cliente.cidCode}
                             </span>
                         )}
                         {cliente.terapias.slice(0, 3).map((t) => (
-                            <span key={t} className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-md">
-                                {ESPECIALIDADES_MAP[t]}
+                            <span key={t} className="text-[9px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-md border border-gray-300">
+                                {t === 'OUTROS' ? 'Outras Terapias' : ESPECIALIDADES_MAP[t] || t}
                             </span>
                         ))}
                     </div>
@@ -137,7 +142,7 @@ function ClienteCard({ cliente, onClick }: { cliente: Cliente; onClick: () => vo
     );
 }
 
-function ClientePerfil({ cliente, onClose }: { cliente: Cliente; onClose: () => void }) {
+function ClientePerfil({ cliente, onClose, onDelete }: { cliente: Cliente; onClose: () => void; onDelete: (id: string, nome: string) => void }) {
     const [aba, setAba] = useState<'dados' | 'terapias' | 'financeiro' | 'historico'>('dados');
     const convenioVencido = cliente.convenioValidade && new Date(cliente.convenioValidade) < new Date();
 
@@ -154,7 +159,7 @@ function ClientePerfil({ cliente, onClose }: { cliente: Cliente; onClose: () => 
                             <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', cliente.ativo ? 'bg-success/10 text-success' : 'bg-error/10 text-error')}>
                                 {cliente.ativo ? 'ATIVO' : 'INATIVO'}
                             </span>
-                            {cliente.cidCode && <span className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full font-semibold">CID {cliente.cidCode}</span>}
+                            {cliente.cidCode && <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold border border-primary/20">CID {cliente.cidCode}</span>}
                         </div>
                     </div>
                     <button
@@ -169,6 +174,13 @@ function ClientePerfil({ cliente, onClose }: { cliente: Cliente; onClose: () => 
                     </button>
                     <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-text-muted">
                         <X className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => onDelete(cliente.id, cliente.nomePaciente)}
+                        className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-error/10 text-error/60 hover:text-error transition-colors"
+                        title="Excluir Cliente"
+                    >
+                        <Trash2 className="w-4 h-4" />
                     </button>
                 </div>
 
@@ -200,6 +212,7 @@ function ClientePerfil({ cliente, onClose }: { cliente: Cliente; onClose: () => 
                             <div className="space-y-3">
                                 <h3 className="text-xs font-bold text-text-muted uppercase tracking-wide">Diagnóstico</h3>
                                 {cliente.cidCode && <InfoRow icon={<Heart className="w-4 h-4" />} label="CID" value={`${cliente.cidCode} — ${cliente.diagnostico}`} />}
+                                {cliente.convenioNome && <InfoRow icon={<Shield className="w-4 h-4" />} label="Convênio" value={`${cliente.convenioNome}${cliente.convenioCarteira ? ` (Carteirinha: ${cliente.convenioCarteira})` : ''}`} />}
                             </div>
                             {convenioVencido && (
                                 <div className="md:col-span-2 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-error/10 border border-error/20">
@@ -215,7 +228,7 @@ function ClientePerfil({ cliente, onClose }: { cliente: Cliente; onClose: () => 
                             {cliente.terapias.map((t) => (
                                 <div key={t} className="card">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm font-semibold text-text">{ESPECIALIDADES_MAP[t]}</span>
+                                        <span className="text-sm font-semibold text-text">{t === 'OUTROS' ? (cliente.terapiasOutros || 'Outros') : ESPECIALIDADES_MAP[t] || t}</span>
                                         <span className={cn('text-xs px-2 py-1 rounded-lg', PAGAMENTO_LABELS[cliente.tipoPagamento]?.cor)}>
                                             {PAGAMENTO_LABELS[cliente.tipoPagamento]?.label}
                                         </span>
@@ -236,14 +249,18 @@ function ClientePerfil({ cliente, onClose }: { cliente: Cliente; onClose: () => 
 
                     {aba === 'financeiro' && (
                         <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="card text-center">
+                                    <p className="text-xs text-text-muted mb-1">Valor Mensal</p>
+                                    <p className="text-xl font-bold text-emerald-600">{formatarMoeda(cliente.valorMensal || 0)}</p>
+                                </div>
                                 <div className="card text-center">
                                     <p className="text-xs text-text-muted mb-1">Total Gasto</p>
                                     <p className="text-xl font-bold text-primary">{formatarMoeda(cliente.totalGasto)}</p>
                                 </div>
                                 <div className="card text-center">
                                     <p className="text-xs text-text-muted mb-1">Tipo Pagamento</p>
-                                    <p className="text-sm font-bold text-text">{PAGAMENTO_LABELS[cliente.tipoPagamento]?.label}</p>
+                                    <p className="text-sm font-bold text-text mt-1">{PAGAMENTO_LABELS[cliente.tipoPagamento]?.label}</p>
                                 </div>
                             </div>
                             <div>
@@ -312,6 +329,19 @@ export default function ClientesPage({ params }: { params: { status: string } })
     const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
     const [showNovoModal, setShowNovoModal] = useState(false);
 
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        variant?: 'danger' | 'warning' | 'info' | 'success';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => {},
+    });
+
     // Estado persistente simulado
     const [clientesList, setClientesList] = useState<Cliente[]>(() => {
         const saved = typeof window !== 'undefined' ? localStorage.getItem('crm_clientes') : null;
@@ -365,7 +395,23 @@ export default function ClientesPage({ params }: { params: { status: string } })
     const handleAddCliente = (data: any) => {
         saveClientes([{ ...data, id: Date.now().toString() }, ...clientesList]);
         setShowNovoModal(false);
-        alert('Novo cliente cadastrado com sucesso!');
+        toast.success('Novo cliente cadastrado com sucesso!');
+    };
+
+    const handleDeleteCliente = (id: string, nome?: string) => {
+        setConfirmModal({
+            isOpen: true,
+            title: 'Excluir Cliente',
+            message: `Tem certeza que deseja excluir permanentemente o cliente ${nome || 'este registro'}? Esta ação não pode ser desfeita.`,
+            variant: 'danger',
+            onConfirm: () => {
+                const newList = clientesList.filter(c => c.id !== id);
+                saveClientes(newList);
+                setClienteSelecionado(null);
+                toast.success('Cliente removido com sucesso.');
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            }
+        });
     };
 
     const clientes = clientesList.filter((c) => {
@@ -410,14 +456,27 @@ export default function ClientesPage({ params }: { params: { status: string } })
                 }
             />
 
-            {/* Tabs */}
-            <div className="flex gap-1 px-4 py-2 bg-white border-b border-border">
-                <a href="/clientes/ativos" className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold', isAtivo ? 'bg-secondary text-primary' : 'text-text-muted hover:bg-gray-50')}>Ativos</a>
-                <a href="/clientes/inativos" className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold', !isAtivo ? 'bg-secondary text-primary' : 'text-text-muted hover:bg-gray-50')}>Inativos</a>
+            {/* Tabs e Métricas */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 px-4 py-3 bg-gray-50 border-b border-gray-200">
+                <div className="flex gap-1 flex-shrink-0">
+                    <a href="/clientes/ativos" className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold', isAtivo ? 'bg-primary/20 text-primary' : 'text-gray-400 hover:bg-white')}>Ativos</a>
+                    <a href="/clientes/inativos" className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold', !isAtivo ? 'bg-primary/20 text-primary' : 'text-gray-400 hover:bg-white')}>Inativos</a>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                    <div className="px-3 py-2 bg-white rounded-lg border border-gray-200 flex flex-col justify-center min-w-[120px]">
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">Mensalidade Particular</span>
+                        <span className="text-sm font-black text-primary">{formatarMoeda(clientes.filter(c => c.tipoPagamento === 'PARTICULAR' || c.tipoPagamento === 'MISTO').reduce((acc, c) => acc + (Number(c.valorMensal) || 0), 0))}</span>
+                    </div>
+                    <div className="px-3 py-2 bg-white rounded-lg border border-emerald-100 flex flex-col justify-center min-w-[120px]">
+                        <span className="text-[10px] text-emerald-600/70 font-bold uppercase tracking-wider mb-0.5">Mensalidade Convênio</span>
+                        <span className="text-sm font-black text-emerald-600">{formatarMoeda(clientes.filter(c => c.tipoPagamento === 'CONVENIO').reduce((acc, c) => acc + (Number(c.valorMensal) || 0), 0))}</span>
+                    </div>
+                </div>
             </div>
 
             {/* Filtros */}
-            <div className="p-4 bg-white border-b border-border space-y-3">
+            <div className="p-4 bg-gray-50 border-b border-gray-200 space-y-3">
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-light" />
                     <input
@@ -479,7 +538,11 @@ export default function ClientesPage({ params }: { params: { status: string } })
 
             {/* Painel do cliente */}
             {clienteSelecionado && (
-                <ClientePerfil cliente={clienteSelecionado} onClose={() => setClienteSelecionado(null)} />
+                <ClientePerfil
+                    cliente={clienteSelecionado}
+                    onClose={() => setClienteSelecionado(null)}
+                    onDelete={handleDeleteCliente}
+                />
             )}
 
             {showNovoModal && (
@@ -488,6 +551,15 @@ export default function ClientesPage({ params }: { params: { status: string } })
                     onSave={handleAddCliente}
                 />
             )}
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                variant={confirmModal.variant}
+            />
         </div>
     );
 }

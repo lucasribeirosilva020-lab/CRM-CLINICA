@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import {
     DndContext, DragEndEvent, DragOverEvent, DragStartEvent,
-    PointerSensor, useSensor, useSensors, DragOverlay, closestCorners,
+    PointerSensor, useSensor, useSensors, DragOverlay, closestCorners, useDroppable
 } from '@dnd-kit/core';
 import {
     SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
@@ -21,6 +21,8 @@ import DropdownMenu from '@/components/ui/DropdownMenu';
 import GanhoVendaModal from '@/components/modals/GanhoVendaModal';
 import LeadDetailsModal from '@/components/modals/LeadDetailsModal';
 import ColunaModal from '@/components/modals/ColunaModal';
+import ConfirmModal from '@/components/ui/ConfirmModal';
+import { toast } from 'react-hot-toast';
 import { uploadFileToStorage } from '@/lib/storage';
 
 type TipoBoard = 'ATENDIMENTO' | 'VENDAS' | 'LTVS';
@@ -59,7 +61,7 @@ const TAG_COLORS: Record<string, string> = {
     'Indicação': 'bg-green-100 text-green-700 border-green-200',
     'Ganho': 'bg-success/10 text-success border-success/20',
     'Perdido': 'bg-error/10 text-error border-error/20',
-    'Desqualificado': 'bg-gray-100 text-gray-600 border-gray-200',
+    'Desqualificado': 'bg-gray-100 text-gray-500 border-gray-200',
 };
 
 function getSlaStyle(minutos: number) {
@@ -68,7 +70,7 @@ function getSlaStyle(minutos: number) {
     return 'border-border';
 }
 
-function CardKanban({ card, isDragging, onSelect, onGanho, onEdit, showValue = true }: { card: KanbanCard; isDragging?: boolean; onSelect?: (c: KanbanCard) => void, onGanho?: (c: KanbanCard) => void, onEdit?: (c: KanbanCard) => void, showValue?: boolean }) {
+function CardKanban({ card, isDragging, onSelect, onGanho, onPerdido, onEdit, onDelete, showValue = true }: { card: KanbanCard; isDragging?: boolean; onSelect?: (c: KanbanCard) => void, onGanho?: (c: KanbanCard) => void, onPerdido?: (c: KanbanCard) => void, onEdit?: (c: KanbanCard) => void, onDelete?: (c: KanbanCard) => void, showValue?: boolean }) {
     const slaClass = getSlaStyle(card.minutosSemResposta);
     const prioridadeCores: Record<string, string> = {
         BAIXA: 'bg-gray-100 text-gray-500',
@@ -102,6 +104,8 @@ function CardKanban({ card, isDragging, onSelect, onGanho, onEdit, showValue = t
                             { label: 'Editar Lead', icon: User, onClick: () => onEdit?.(card) },
                             { label: 'Abrir Conversa', icon: MessageCircle, onClick: () => (window.location.href = `/conversas?lead=${card.id}`) },
                             { label: 'Dar Ganho', icon: Check, onClick: () => onGanho?.(card) },
+                            { label: 'Dar Perdido', icon: X, variant: 'danger', onClick: () => onPerdido?.(card) },
+                            { label: 'Excluir Lead', icon: X, variant: 'danger', onClick: () => onDelete?.(card) },
                         ]}
                     />
                 </div>
@@ -136,7 +140,7 @@ function CardKanban({ card, isDragging, onSelect, onGanho, onEdit, showValue = t
                         R$ {card.valor.toLocaleString('pt-BR')}
                     </span>
                     {card.pagamento && (
-                        <span className="text-[9px] text-text-muted font-medium bg-gray-50 px-1.5 py-0.5 rounded border border-border">
+                        <span className="text-[9px] text-gray-500 font-medium bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
                             {card.pagamento}
                         </span>
                     )}
@@ -164,7 +168,7 @@ function CardKanban({ card, isDragging, onSelect, onGanho, onEdit, showValue = t
     );
 }
 
-function SortableCard({ card, onSelect, onGanho, onEdit, showValue }: { card: KanbanCard; onSelect: (c: KanbanCard) => void, onGanho: (c: KanbanCard) => void, onEdit: (c: KanbanCard) => void, showValue: boolean }) {
+function SortableCard({ card, onSelect, onGanho, onPerdido, onEdit, onDelete, showValue }: { card: KanbanCard; onSelect: (c: KanbanCard) => void, onGanho: (c: KanbanCard) => void, onPerdido: (c: KanbanCard) => void, onEdit: (c: KanbanCard) => void, onDelete: (c: KanbanCard) => void, showValue: boolean }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -173,29 +177,35 @@ function SortableCard({ card, onSelect, onGanho, onEdit, showValue }: { card: Ka
 
     return (
         <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-            <CardKanban card={card} isDragging={isDragging} onSelect={onSelect} onGanho={onGanho} onEdit={onEdit} showValue={showValue} />
+            <CardKanban card={card} isDragging={isDragging} onSelect={onSelect} onGanho={onGanho} onPerdido={onPerdido} onEdit={onEdit} onDelete={onDelete} showValue={showValue} />
         </div>
     );
 }
 
-function Coluna({ coluna, isAdmin, onSelect, onGanho, onEdit, showValue, onEditColuna, onDeleteColuna, onMoveColuna }: {
+function Coluna({ coluna, isAdmin, onSelect, onGanho, onPerdido, onEdit, onDelete, showValue, onEditColuna, onDeleteColuna, onMoveColuna }: {
     coluna: KanbanColuna;
     isAdmin: boolean;
     onSelect: (c: KanbanCard) => void;
     onGanho: (c: KanbanCard) => void;
+    onPerdido: (c: KanbanCard) => void;
     onEdit: (c: KanbanCard) => void;
+    onDelete: (c: KanbanCard) => void;
     showValue: boolean;
     onEditColuna?: (c: KanbanColuna) => void;
     onDeleteColuna?: (c: KanbanColuna) => void;
     onMoveColuna?: (c: KanbanColuna, direction: -1 | 1) => void;
 }) {
+    const { setNodeRef } = useDroppable({
+        id: coluna.id,
+    });
+
     return (
-        <div className="flex-shrink-0 w-72 flex flex-col bg-gray-50/80 rounded-xl border border-border">
+        <div className="flex-shrink-0 w-[85vw] sm:w-72 flex flex-col bg-gray-50/80 rounded-xl border border-border snap-center">
             {/* Header da coluna */}
             <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border">
                 <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: coluna.cor }} />
                 <span className="text-xs font-bold text-text flex-1 truncate">{coluna.nome}</span>
-                <span className="text-[10px] font-semibold text-text-muted bg-white border border-border px-1.5 py-0.5 rounded-full">
+                <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-full">
                     {coluna.cards.length}
                 </span>
                 {isAdmin && (
@@ -216,15 +226,15 @@ function Coluna({ coluna, isAdmin, onSelect, onGanho, onEdit, showValue, onEditC
             </div>
 
             {/* Cards */}
-            <div className="flex-1 p-2 space-y-2 min-h-[100px]">
+            <div ref={setNodeRef} className="flex-1 p-2 space-y-2 min-h-[100px]">
                 <SortableContext items={coluna.cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                     {coluna.cards.map((card) => (
-                        <SortableCard key={card.id} card={card} onSelect={onSelect} onGanho={onGanho} onEdit={onEdit} showValue={showValue} />
+                        <SortableCard key={card.id} card={card} onSelect={onSelect} onGanho={onGanho} onPerdido={onPerdido} onEdit={onEdit} onDelete={onDelete} showValue={showValue} />
                     ))}
                 </SortableContext>
                 {coluna.cards.length === 0 && (
-                    <div className="h-16 flex items-center justify-center border-2 border-dashed border-border rounded-xl text-xs text-text-light">
-                        Sem cards visíveis
+                    <div className="h-16 flex items-center justify-center border-2 border-dashed border-border rounded-xl text-xs text-text-light pointer-events-none">
+                        Solte cards aqui
                     </div>
                 )}
             </div>
@@ -246,11 +256,20 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
     const [showGanhoModal, setShowGanhoModal] = useState(false);
     const [colunaModalOpen, setColunaModalOpen] = useState(false);
     const [colunaEmEdicao, setColunaEmEdicao] = useState<KanbanColuna | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        variant?: 'danger' | 'warning' | 'info' | 'success';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => {},
+    });
 
-    const [mensagensLocais, setMensagensLocais] = useState<any[]>([
-        { id: 'm1', de: 'lead', texto: 'Olá, gostaria de saber mais...', timestamp: new Date(Date.now() - 10000).toISOString() },
-        { id: 'm2', de: 'sistema', texto: 'Claro, como posso ajudar?', timestamp: new Date().toISOString() }
-    ]);
+    const [mensagensLocais, setMensagensLocais] = useState<any[]>([]);
 
     // Estados para o Chat Avançado
     const [showScheduling, setShowScheduling] = useState(false);
@@ -289,26 +308,38 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
                 if (res.ok) { fetchBoard(); return true; }
             }
             alert('Erro ao salvar coluna.');
+            toast.error('Erro ao salvar coluna.');
             return false;
         } catch (e) {
             console.error('Erro ao salvar coluna:', e);
+            toast.error('Ocorreu um erro ao salvar a coluna.');
             return false;
         }
     };
 
     const handleDeleteColuna = async (col: KanbanColuna) => {
-        if (!confirm(`Tem certeza que deseja excluir a coluna "${col.nome}"?`)) return;
-        try {
-            const res = await fetch(`/api/kanban/colunas/${col.id}`, { method: 'DELETE' });
-            const json = await res.json();
-            if (json.success) {
-                fetchBoard();
-            } else {
-                alert(json.error || 'Erro ao excluir coluna.');
+        setConfirmModal({
+            isOpen: true,
+            title: 'Excluir Coluna',
+            message: `Tem certeza que deseja excluir a coluna "${col.nome}"? Esta ação removerá a coluna permanentemente.`,
+            variant: 'danger',
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`/api/kanban/colunas/${col.id}`, { method: 'DELETE' });
+                    const json = await res.json();
+                    if (json.success) {
+                        toast.success('Coluna excluída com sucesso!');
+                        fetchBoard();
+                    } else {
+                        toast.error(json.error || 'Erro ao excluir coluna.');
+                    }
+                } catch (e) {
+                    console.error('Erro ao excluir coluna:', e);
+                    toast.error('Erro de conexão ao excluir coluna.');
+                }
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
             }
-        } catch (e) {
-            console.error('Erro ao excluir coluna:', e);
-        }
+        });
     };
 
     const handleMoveColuna = async (col: KanbanColuna, dir: -1 | 1) => {
@@ -385,7 +416,7 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
             }
 
             const payload = {
-                conteudo: mensagemInput || (selectedFile?.name || 'Áudio'),
+                conteudo: mensagemInput || (audioBlob ? 'Áudio' : ''),
                 tipo: fileType?.toUpperCase() || 'TEXTO',
                 de: 'sistema',
                 url: urlUpload || undefined,
@@ -416,7 +447,7 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
             }
         } catch (error) {
             console.error('Erro ao enviar mensagem com anexo:', error);
-            alert('Falha ao enviar mensagem. Por favor, verifique o console do navegador e do servidor.');
+            toast.error('Falha ao enviar mensagem. Por favor, verifique sua conexão.');
         }
     };
 
@@ -447,7 +478,7 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
             }, 1000);
         } catch (err) {
             console.error("Erro ao acessar microfone:", err);
-            alert("Não foi possível acessar o microfone.");
+            toast.error("Não foi possível acessar o microfone.");
         }
     };
 
@@ -487,7 +518,7 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
 
     const handleScheduleMessage = () => {
         if (!scheduledDate || !scheduledTime || (!mensagemAgendamento.trim() && !selectedFile && !audioBlob)) {
-            alert('Preencha a data, hora e a mensagem/arquivo.');
+            toast.error('Preencha a data, hora e a mensagem/arquivo.');
             return;
         }
 
@@ -505,7 +536,7 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
         agendadas.push({ ...scheduledMsg, leadId: leadSelecionado?.id, leadNome: leadSelecionado?.nome });
         localStorage.setItem(key, JSON.stringify(agendadas));
 
-        alert(`Mensagem agendada para ${scheduledDate} às ${scheduledTime}`);
+        toast.success(`Mensagem agendada para ${scheduledDate} às ${scheduledTime}`);
         setShowScheduling(false);
         setMensagemAgendamento('');
         setFilePreview(null);
@@ -513,22 +544,34 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
         setFileType(null);
     };
 
-    // Efeito para sincronizar mensagens com localStorage no Kanban
+    // Efeito para sincronizar mensagens com API
+    const fetchMensagens = async (leadId: string) => {
+        try {
+            const res = await fetch(`/api/leads/${leadId}/mensagens`);
+            const json = await res.json();
+            if (json.success) setMensagensLocais(json.data);
+        } catch (e) {
+            console.error('Erro ao buscar mensagens do board:', e);
+        }
+    };
+
     useEffect(() => {
-        if (!leadSelecionado) return;
+        if (!leadSelecionado) {
+            setMensagensLocais([]);
+            return;
+        }
+        fetchMensagens(leadSelecionado.id);
+    }, [leadSelecionado]);
 
-        const loadMessages = () => {
-            const localMsgs = JSON.parse(localStorage.getItem(`crm_chat_msgs_${leadSelecionado.id}`) || 'null');
-            if (localMsgs) {
-                setMensagensLocais(localMsgs);
-            } else {
-                setMensagensLocais([]); // Ou carregar mock se preferir
+    // Polling para novas mensagens (só se a aba principal não gerencia tudo ou como backup)
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible' && leadSelecionado) {
+                fetchMensagens(leadSelecionado.id);
             }
-        };
+        }, 15000); 
 
-        loadMessages();
-        window.addEventListener('storage', loadMessages);
-        return () => window.removeEventListener('storage', loadMessages);
+        return () => clearInterval(interval);
     }, [leadSelecionado]);
 
     // Efeito para verificar agendamentos no Kanban
@@ -598,7 +641,7 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
                 return isAdmin; // Admin vê todos
             }
             if (boardType === 'LTVS') {
-                return isAdmin || isVendedor; // Admin e Vendedores vêm LTVs
+                return true; // Todos os usuários veem todos os leads perdidos
             }
             return false;
         })
@@ -632,23 +675,53 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
             // Mover para outra coluna
             const card = activeColuna.cards.find((c: any) => c.id === active.id)!;
 
+            // Updated Optimistic Local State immediately
+            setColunas((prev) => prev.map(col => {
+                if (col.id === activeColuna.id) {
+                    return { ...col, cards: col.cards.filter(c => c.id !== active.id) };
+                }
+                if (col.id === overColuna.id) {
+                    const destIndex = col.cards.findIndex(c => c.id === over.id);
+                    const newCards = [...col.cards];
+                    if (destIndex >= 0) newCards.splice(destIndex, 0, card);
+                    else newCards.push(card);
+                    return { ...col, cards: newCards };
+                }
+                return col;
+            }));
+
             // Persistir no banco via API
             const updateField = boardType === 'ATENDIMENTO' ? 'kanbanAtenStat' : 'kanbanVendStat';
 
-            try {
-                const res = await fetch(`/api/leads/${card.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ [updateField]: overColuna.slug })
-                });
-                const json = await res.json();
-                if (json.success) {
-                    fetchBoard(); // Recarregar do banco para garantir consistência
-                } else {
-                    alert('Erro ao mover lead: ' + json.error);
+            // Optional: call the API without awaiting the state to lock UI
+            fetch(`/api/leads/${card.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [updateField]: overColuna.slug })
+            }).then(res => res.json()).then(json => {
+                if (!json.success) {
+                    toast.error('Erro ao mover lead: ' + json.error);
+                    fetchBoard(); // Revert on failure
                 }
-            } catch (error) {
+            }).catch(error => {
                 console.error('Erro ao mover lead:', error);
+                toast.error('Erro de conexão ao mover lead.');
+                fetchBoard(); // Revert on failure
+            });
+        } else {
+            // Reordenação na mesma coluna
+            if (active.id !== over.id) {
+                setColunas((prev) => prev.map(col => {
+                    if (col.id === activeColuna.id) {
+                        const startIdx = col.cards.findIndex((c: any) => c.id === active.id);
+                        const endIdx = col.cards.findIndex((c: any) => c.id === over.id);
+                        const newCards = [...col.cards];
+                        const [removed] = newCards.splice(startIdx, 1);
+                        newCards.splice(endIdx, 0, removed);
+                        return { ...col, cards: newCards };
+                    }
+                    return col;
+                }));
             }
         }
     }
@@ -672,6 +745,38 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
         }
     };
 
+    const handleDeleteLead = async (leadId?: string, leadNome?: string) => {
+        const id = leadId || leadParaDetalhes?.id;
+        const nome = leadNome || leadParaDetalhes?.nome || 'este lead';
+        if (!id) return;
+
+        setConfirmModal({
+            isOpen: true,
+            title: 'Excluir Lead',
+            message: `Tem certeza que deseja excluir permanentemente o lead ${nome}? Esta ação não pode ser desfeita.`,
+            variant: 'danger',
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`/api/leads/${id}`, {
+                        method: 'DELETE',
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                        toast.success('Lead excluído permanentemente!');
+                        fetchBoard();
+                        setLeadParaDetalhes(null);
+                    } else {
+                        toast.error(json.error || 'Erro ao excluir lead.');
+                    }
+                } catch (error) {
+                    console.error('Erro ao excluir lead:', error);
+                    toast.error('Erro de conexão ao excluir lead.');
+                }
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            }
+        });
+    };
+
     const handleGanho = async (valor: number, vendedorId: string, servico: string, origem: string, pagamento: string) => {
         if (!leadParaGanho) return;
 
@@ -683,6 +788,7 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
                     valor,
                     pagamento,
                     kanbanVendStat: 'ganho',
+                    atribuidoA: vendedorId,
                     tags: Array.from(new Set([...(leadParaGanho.tags || []), 'Ganho', origem]))
                 })
             });
@@ -691,11 +797,44 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
                 fetchBoard();
                 setShowGanhoModal(false);
                 setLeadParaGanho(null);
-                alert(`Venda registrada com sucesso!`);
+                toast.success(`Venda registrada com sucesso!`);
             }
         } catch (error) {
             console.error('Erro ao registrar ganho:', error);
         }
+    };
+
+    const handlePerdido = async (card: KanbanCard) => {
+        setConfirmModal({
+            isOpen: true,
+            title: 'Marcar como Perdido',
+            message: `Deseja marcar ${card.nome} como Perdido? O lead será arquivado.`,
+            variant: 'warning',
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`/api/leads/${card.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            kanbanAtenStat: 'arquivado',
+                            kanbanVendStat: 'sem_interesse',
+                            tags: Array.from(new Set([...(card.tags || []), 'Perdido']))
+                        })
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                        toast.success('Lead marcado como perdido.');
+                        fetchBoard();
+                    } else {
+                        toast.error('Erro ao marcar lead como perdido.');
+                    }
+                } catch (error) {
+                    console.error('Erro ao marcar lead como perdido:', error);
+                    toast.error('Erro de conexão.');
+                }
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            }
+        });
     };
 
     return (
@@ -717,12 +856,17 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
             />
 
             {/* Tabs */}
-            <div className="flex gap-1 px-4 py-2 bg-white border-b border-border">
+            <div className="flex gap-1 px-4 py-2 bg-gray-50 border-b border-gray-200">
                 {[
                     { key: 'ATENDIMENTO', label: 'Atendimento' },
                     { key: 'VENDAS', label: 'Vendas' },
-                    { key: 'LTVS', label: 'LTVs' }
-                ].map((tab) => (
+                    { key: 'LTVS', label: 'Leads Perdidos' }
+                ].filter(tab => {
+                    if (isAdmin) return true;
+                    if (isVendedor && tab.key === 'ATENDIMENTO') return false;
+                    if (isAtendente && tab.key === 'VENDAS') return false;
+                    return true;
+                }).map((tab) => (
                     <a
                         key={tab.key}
                         href={`/kanban/${tab.key.toLowerCase()}`}
@@ -739,7 +883,7 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
             </div>
 
             {/* Board */}
-            <div className="flex-1 overflow-x-auto p-4">
+            <div className="flex-1 overflow-x-auto p-4 no-scrollbar snap-x snap-mandatory">
                 {loading ? (
                     <div className="flex items-center justify-center h-48 text-xs text-text-muted">
                         Carregando board...
@@ -759,7 +903,9 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
                                     isAdmin={!!isAdmin}
                                     onSelect={setLeadSelecionado}
                                     onGanho={(c: any) => { setLeadParaGanho(c); setShowGanhoModal(true); }}
+                                    onPerdido={handlePerdido}
                                     onEdit={setLeadParaDetalhes}
+                                    onDelete={(c) => handleDeleteLead(c.id, c.nome)}
                                     showValue={boardType !== 'ATENDIMENTO'}
                                     onEditColuna={(c) => { setColunaEmEdicao(c); setColunaModalOpen(true); }}
                                     onDeleteColuna={handleDeleteColuna}
@@ -809,10 +955,9 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
                         {/* Abas: Chat e Info */}
                         <div className="flex-1 flex flex-col overflow-hidden">
                             <div className="px-4 py-3 bg-gray-50 border-b border-border text-xs">
-                                <h4 className="font-bold text-text mb-1">Anotações Internas</h4>
+                                <h4 className="font-bold text-text mb-1">Busca do Paciente</h4>
                                 <p className="text-text-muted leading-relaxed">
-                                    Paciente agendou avaliação inicial. Preferência de horário: Manhã.
-                                    Já enviou a carteirinha do convênio por foto (salvo no drive).
+                                    {leadSelecionado?.busca || 'Não informado'}
                                 </p>
                             </div>
 
@@ -878,7 +1023,7 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
                                                     ? 'bg-primary text-white rounded-br-sm'
                                                     : 'bg-white border border-border text-text rounded-bl-sm shadow-sm'
                                             )}>
-                                                {msg.texto}
+                                                {msg.conteudo}
                                             </div>
                                         </div>
                                     );
@@ -1080,6 +1225,21 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
                                             value={mensagemInput}
                                             onChange={(e) => setMensagemInput(e.target.value)}
                                             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensagem(); } }}
+                                            onPaste={(e) => {
+                                                const items = e.clipboardData?.items;
+                                                if (items) {
+                                                    for (const item of Array.from(items)) {
+                                                        if (item.type.startsWith('image/')) {
+                                                            const file = item.getAsFile();
+                                                            if (file) {
+                                                                e.preventDefault();
+                                                                handleFileSelect({ target: { files: [file] } } as any, 'imagem');
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }}
                                             placeholder="Digite uma mensagem..."
                                             rows={1}
                                             className="input resize-none py-2 text-sm w-full pr-10"
@@ -1116,6 +1276,7 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
                     lead={leadParaDetalhes as any}
                     onClose={() => setLeadParaDetalhes(null)}
                     onSave={handleSaveLeadDetails}
+                    onDelete={() => handleDeleteLead(leadParaDetalhes.id, leadParaDetalhes.nome)}
                 />
             )}
 
@@ -1123,8 +1284,17 @@ export default function KanbanPage({ params }: { params: { tipo: string } }) {
                 isOpen={colunaModalOpen}
                 onClose={() => { setColunaModalOpen(false); setColunaEmEdicao(null); }}
                 coluna={colunaEmEdicao}
-                tipo={boardType as 'ATENDIMENTO' | 'VENDAS'}
+                tipo={boardType as 'ATENDIMENTO' | 'VENDAS' | 'LTVS'}
                 onSalvar={handleSalvarColuna}
+            />
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                variant={confirmModal.variant}
             />
         </div>
     );

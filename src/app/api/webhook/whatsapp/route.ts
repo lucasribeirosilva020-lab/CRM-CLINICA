@@ -1,109 +1,315 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import fs from 'fs';
 
 /**
- * Webhook para receber eventos da Evolution API
- * 
- * A Evolution vai chamar esta URL em POST a cada mensagem recebida/enviada.
- * URL configurada: NEXT_PUBLIC_APP_URL/api/webhook/whatsapp
+ * Webhook para receber eventos da Uazapi
  */
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json();
-        const { event, instance, data } = body;
+        const rawBody = await req.json();
+        // fs.appendFileSync('/tmp/webhook_monitor.log', `[${new Date().toISOString()}] RAW: ${JSON.stringify(rawBody)}\n`);
+        
+        let body = rawBody;
+        
+        const event = body.event || body.type || body.evento;
+        const instance = body.instance || body.instanceName || body.instancia;
+        const data = body.data || body.payload || body;
 
-        console.log('[WEBHOOK]', event, instance);
+        // --- IDENTIFICAÇÃO DA CLÍNICA ---
+        let clinicaId = body.clinicaId || body.clínicaId || data?.clinicaId || body.idClinica;
 
-        // Extrai o clinicaId da instância (formato: "clinica-{clinicaId}")
-        const clinicaId = instance?.replace('clinica-', '');
-        if (!clinicaId) return NextResponse.json({ ok: true });
+        // Fallback 1: Pela URL do webhook (n8n)
+        if (!clinicaId) {
+            const possibleUrl = body.webhookUrl || data?.webhookUrl || body.webhook_url;
+            if (possibleUrl) {
+                const { data: configs } = await supabaseAdmin
+                    .from('ConfiguracaoClinica')
+                    .select('clinicaId')
+                    .ilike('webhookN8nUrl', `%${possibleUrl}%`);
+                
+                clinicaId = configs?.[0]?.clinicaId;
+                if (clinicaId) console.log(`[WEBHOOK] Clínica identificada via webhookUrl fallback: ${clinicaId}`);
+            }
+        }
 
-        // === MENSAGEM RECEBIDA ===
-        if (event === 'messages.upsert' || event === 'MESSAGES_UPSERT') {
-            for (const msg of data?.messages || []) {
-                // Ignora mensagens enviadas pelo próprio bot/sistema
-                if (msg.key?.fromMe) continue;
+        // Fallback 2: Pela instância/slug
+        if (!clinicaId && instance) {
+            const { data: clinica } = await supabaseAdmin
+                .from('Clinica')
+                .select('id')
+                .eq('slug', instance)
+                .single();
+            clinicaId = clinica?.id;
+        }
 
-                const telefone = msg.key?.remoteJid?.replace('@s.whatsapp.net', '');
-                const conteudo = msg.message?.conversation ||
-                    msg.message?.extendedTextMessage?.text ||
-                    '[Mídia recebida]';
+        if (!clinicaId) {
+            console.warn(`[WEBHOOK REJEITADO] Clínica não identificada. Payload: ${JSON.stringify(body).slice(0, 200)}...`);
+            return NextResponse.json({ ok: true, error: 'Clínica não identificada' });
+        }
 
-                if (!telefone || !conteudo) continue;
+        const date = new Date();
+        const nowDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString();
 
-                // Busca ou cria o lead pelo telefone
-                let lead = await prisma.lead.findFirst({
-                    where: { clinicaId, telefone },
-                    include: { conversa: true }
-                });
+        // --- PROCESSAMENTO DA MENSAGEM ---
+        
+        // 1. Tenta extrair Numero e Mensagem (permissivo)
+        let numeroRaw = body.Numero || body.numero || body.phone || body.telefone || body.whatsapp || data?.remoteJid || data?.from;
+        let mensagemRaw = body.Mensagem || body.mensagem || body.text || body.conteudo || body.content || data?.text || data?.body;
+        let nomeContato = body.Nome || body.nome || body.name || body.pushName || data?.pushName || data?.sender?.name || data?.senderName || body.senderName;
+        let isFromMe = (body.fromMe === true);
 
-                if (!lead) {
-                    const nome = msg.pushName || telefone;
-                    lead = await prisma.lead.create({
-                        data: {
+        // Se a Mensagem for um JSON (comum no n8n)
+        if (typeof mensagemRaw === 'string' && mensagemRaw.trim().startsWith('{')) {
+            try {
+                const parsed = JSON.parse(mensagemRaw);
+                const deeper = parsed.body || parsed.message || parsed.payload || parsed.data || parsed;
+                const msgObj = deeper.message || deeper;
+
+                mensagemRaw = msgObj.content || msgObj.text || msgObj.body || msgObj.conversation || mensagemRaw;
+                if (typeof mensagemRaw === 'object') mensagemRaw = mensagemRaw.text || mensagemRaw.content || JSON.stringify(mensagemRaw);
+                
+                if (msgObj.fromMe !== undefined) isFromMe = msgObj.fromMe;
+                else if (deeper.fromMe !== undefined) isFromMe = deeper.fromMe;
+
+                if (!numeroRaw) {
+                    numeroRaw = deeper.wa_chatid || deeper.remoteJid || msgObj.chatid || msgObj.remoteJid || deeper.phone || msgObj.phone;
+                }
+                
+                if (!nomeContato) {
+                    nomeContato = msgObj.pushName || msgObj.senderName || deeper.pushName || deeper.senderName || deeper.nome || msgObj.nome;
+                }
+            } catch(e) { }
+        }
+
+        if (numeroRaw && mensagemRaw) {
+            const telefone = String(numeroRaw).replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
+            const mensagemTexto = String(mensagemRaw);
+
+            if (telefone && mensagemTexto && mensagemTexto !== 'undefined' && mensagemTexto !== '') {
+                console.log(`[WEBHOOK] Salvando mensagem: ${telefone}. fromMe: ${isFromMe}. Texto: ${mensagemTexto.slice(0, 50)}...`);
+
+                // Busca lead e conversa
+                const { data: lead } = await supabaseAdmin
+                    .from('Lead')
+                    .select('id, conversa:Conversa(id, naoLidas, kanbanAtenStat, kanbanVendStat)')
+                    .eq('clinicaId', clinicaId)
+                    .eq('telefone', telefone)
+                    .single();
+
+                let leadId = lead?.id;
+                let conversa = (lead?.conversa as any)?.[0];
+
+                if (!leadId) {
+                    const finalName = nomeContato || `Lead ${telefone}`;
+                    const { data: novoLead } = await supabaseAdmin
+                        .from('Lead')
+                        .insert({ id: crypto.randomUUID(), clinicaId, nome: finalName, telefone, tags: '[]', createdAt: nowDate, updatedAt: nowDate })
+                        .select()
+                        .single();
+                    leadId = novoLead?.id;
+                }
+
+                if (!conversa && leadId) {
+                    const { data: novaConv } = await supabaseAdmin
+                        .from('Conversa')
+                        .insert({ id: crypto.randomUUID(), clinicaId, leadId, kanbanAtenStat: 'fila_espera', kanbanVendStat: 'contato_inicial', createdAt: nowDate, updatedAt: nowDate })
+                        .select()
+                        .single();
+                    conversa = novaConv;
+                }
+
+                if (conversa) {
+                    const messageId = `zmsg_${new Date().toISOString()}_n8n_${body.id || Date.now()}`;
+                    
+                    await supabaseAdmin.from('Mensagem').insert({
+                        id: messageId,
+                        clinicaId,
+                        conversaId: conversa.id,
+                        conteudo: mensagemTexto,
+                        tipo: 'TEXTO',
+                        de: isFromMe ? 'sistema' : telefone,
+                        lida: isFromMe,
+                        timestamp: nowDate
+                    });
+
+                    const isPerdido = !isFromMe && (['perdido', 'ltv_perdidos', 'desqualificado'].includes(conversa.kanbanAtenStat) || ['perdido', 'ltv_perdidos', 'desqualificado'].includes(conversa.kanbanVendStat));
+                    
+                    await supabaseAdmin.from('Conversa').update({
+                        ultimaMensagem: mensagemTexto,
+                        ultimaMensagemAt: nowDate,
+                        updatedAt: nowDate,
+                        ...(!isFromMe && { naoLidas: (conversa.naoLidas || 0) + 1 }),
+                        ...(isPerdido && { kanbanAtenStat: 'fila_espera', kanbanVendStat: 'contato_inicial' })
+                    }).eq('id', conversa.id);
+                }
+
+                return NextResponse.json({ ok: true });
+            }
+        }
+
+        // === MENSAGEM RECEBIDA (Native Uazapi Format) ===
+        if (event === 'messages.upsert' || event === 'message.received' || event === 'MESSAGES_UPSERT') {
+            const messages = data?.messages || [data]; 
+            
+            for (const msg of messages) {
+                const isMsgFromMe = msg.fromMe || msg.key?.fromMe || (msg.pushName?.includes('Sofia'));
+                const messageId = msg.key?.id || msg.id || `uaz_${Date.now()}`;
+                
+                console.log(`[WEBHOOK NATIVE] Processando. fromMe: ${isMsgFromMe}, ID: ${messageId}`);
+
+                const remoteJid = msg.key?.remoteJid || msg.remoteJid || msg.from;
+                const telefone = remoteJid?.replace('@s.whatsapp.net', '')?.replace('@c.us', '');
+                
+                const msgData = msg.message || {};
+                let conteudo = msgData.conversation || msgData.extendedTextMessage?.text || msg.body || msg.text || '';
+                let tipo = 'TEXTO';
+                let urlMedia = '';
+                let nomeArquivo = '';
+
+                if (msgData.imageMessage) {
+                    tipo = 'IMAGEM';
+                    urlMedia = msgData.imageMessage.url || '';
+                    conteudo = msgData.imageMessage.caption || conteudo || '[Imagem]';
+                    nomeArquivo = 'imagem.jpg';
+                } else if (msgData.audioMessage) {
+                    tipo = 'AUDIO';
+                    urlMedia = msgData.audioMessage.url || '';
+                    conteudo = '[Áudio]';
+                    nomeArquivo = 'audio.ogg';
+                } else if (msgData.videoMessage) {
+                    tipo = 'VIDEO';
+                    urlMedia = msgData.videoMessage.url || '';
+                    conteudo = msgData.videoMessage.caption || conteudo || '[Vídeo]';
+                    nomeArquivo = 'video.mp4';
+                } else if (msgData.documentMessage) {
+                    tipo = 'DOCUMENTO';
+                    urlMedia = msgData.documentMessage.url || '';
+                    conteudo = msgData.documentMessage.title || msgData.documentMessage.fileName || '[Documento]';
+                    nomeArquivo = msgData.documentMessage.fileName || 'documento.pdf';
+                }
+
+                if (!telefone || (!conteudo && !urlMedia)) continue;
+
+                // Deduplicação básica
+                const { data: existe } = await supabaseAdmin.from('Mensagem').select('id').eq('id', messageId).single();
+                if (existe) {
+                    console.log(`[WEBHOOK NATIVE] Mensagem já existe: ${messageId}`);
+                    continue;
+                }
+
+                // 1. Busca ou cria o lead pelo telefone
+                const { data: lead } = await supabaseAdmin
+                    .from('Lead')
+                    .select('id, nome, conversa:Conversa(id, naoLidas, kanbanAtenStat, kanbanVendStat)')
+                    .eq('clinicaId', clinicaId)
+                    .eq('telefone', telefone)
+                    .single();
+
+                let leadId = lead?.id;
+                let conversa = (lead?.conversa as any)?.[0];
+
+                if (!leadId) {
+                    const nome = msg.pushName || msg.sender?.name || telefone;
+                    const { data: novoLead } = await supabaseAdmin
+                        .from('Lead')
+                        .insert({
+                            id: crypto.randomUUID(),
                             clinicaId,
                             nome,
                             telefone,
                             tags: '[]',
-                        },
-                        include: { conversa: true }
-                    });
+                            createdAt: nowDate,
+                            updatedAt: nowDate
+                        })
+                        .select()
+                        .single();
+                    leadId = novoLead?.id;
                 }
 
-                // Busca ou cria conversa
-                let conversa = lead.conversa;
-                if (!conversa) {
-                    conversa = await prisma.conversa.create({
-                        data: {
+                if (!conversa && leadId) {
+                    const { data: novaConv } = await supabaseAdmin
+                        .from('Conversa')
+                        .insert({
+                            id: crypto.randomUUID(),
                             clinicaId,
-                            leadId: lead.id,
+                            leadId,
                             kanbanAtenStat: 'fila_espera',
-                        }
-                    });
+                            kanbanVendStat: 'contato_inicial',
+                            createdAt: nowDate,
+                            updatedAt: nowDate
+                        })
+                        .select()
+                        .single();
+                    conversa = novaConv;
                 }
 
-                // Salva a mensagem
-                await prisma.mensagem.create({
-                    data: {
+                // 2. Criar mensagem no banco (Workaround: salvar metadados no conteudo)
+                let finalConteudo = conteudo;
+                if (urlMedia) {
+                    finalConteudo = `[MEDIA_URL]|${urlMedia}|${nomeArquivo}|${conteudo}`;
+                }
+
+                if (conversa) {
+                    await supabaseAdmin.from('Mensagem').insert({
+                        id: messageId,
                         clinicaId,
                         conversaId: conversa.id,
-                        conteudo,
-                        tipo: 'TEXTO',
-                        de: telefone,
-                        lida: false,
-                    }
-                });
+                        conteudo: finalConteudo,
+                        tipo: tipo,
+                        de: isMsgFromMe ? 'sistema' : telefone,
+                        lida: isMsgFromMe,
+                        timestamp: nowDate
+                    });
 
-                // Atualiza resumo da conversa
-                await prisma.conversa.update({
-                    where: { id: conversa.id },
-                    data: {
-                        ultimaMensagem: conteudo,
-                        ultimaMensagemAt: new Date(),
-                        naoLidas: { increment: 1 },
-                    }
-                });
+                    const isPerdidoUaz = !isMsgFromMe && (['perdido', 'ltv_perdidos', 'desqualificado'].includes(conversa.kanbanAtenStat) || ['perdido', 'ltv_perdidos', 'desqualificado'].includes(conversa.kanbanVendStat));
+
+                    await supabaseAdmin.from('Conversa').update({
+                        ultimaMensagem: conteudo?.substring(0, 100) || '',
+                        ultimaMensagemAt: nowDate,
+                        updatedAt: nowDate,
+                        ...(!isMsgFromMe && { naoLidas: (conversa.naoLidas || 0) + 1 }),
+                        ...(isPerdidoUaz && { kanbanAtenStat: 'fila_espera', kanbanVendStat: 'contato_inicial' })
+                    }).eq('id', conversa.id);
+                }
+
             }
         }
 
         // === STATUS DE CONEXÃO ===
-        if (event === 'connection.update' || event === 'CONNECTION_UPDATE') {
-            const conectado = data?.state === 'open';
-            await prisma.configuracaoClinica.upsert({
-                where: { clinicaId },
-                create: { clinicaId, whatsappConectado: conectado },
-                update: { whatsappConectado: conectado }
-            });
+        if (event === 'connection.update' || event === 'connection-update' || event === 'CONNECTION_UPDATE') {
+            const state = data?.state || data?.status;
+            const conectado = state === 'open' || state === 'connected';
+            
+            await supabaseAdmin.from('ConfiguracaoClinica').upsert({
+                clinicaId,
+                whatsappConectado: conectado,
+                updatedAt: nowDate
+            }, { onConflict: 'clinicaId' });
+
+            if (conectado) {
+                console.log(`[UAZAPI WEBHOOK] Disparando sincronização automática para clínica: ${instance}`);
+                const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+                
+                fetch(`${appUrl}/api/whatsapp/sync`, { 
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-internal-secret': process.env.UAZAPI_TOKEN || ''
+                    },
+                    body: JSON.stringify({ clinicaId })
+                }).catch(err => console.error('[UAZAPI WEBHOOK] Erro ao disparar sync:', err));
+            }
         }
 
         return NextResponse.json({ ok: true });
     } catch (error) {
-        console.error('[WEBHOOK ERROR]', error);
+        console.error('[UAZAPI WEBHOOK ERROR]', error);
         return NextResponse.json({ ok: false }, { status: 500 });
     }
 }
 
-// A Evolution também faz GET para validar o webhook
 export async function GET() {
-    return NextResponse.json({ status: 'webhook ativo' });
+    return NextResponse.json({ status: 'webhook Uazapi ativo' });
 }
+

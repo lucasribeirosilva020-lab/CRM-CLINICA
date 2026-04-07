@@ -14,7 +14,23 @@ export function withAuth(
     requiredPerfil?: ('ADMIN' | 'VENDEDOR' | 'ATENDENTE')[]
 ) {
     return async (req: NextRequest, context: any) => {
-        // Tenta pegar token do header (Authorization: Bearer ...) OU do cookie
+        // 1. Tenta pegar dados já validados pelo middleware (header x-user-data)
+        const userDataHeader = req.headers.get('x-user-data');
+        if (userDataHeader) {
+            try {
+                const user = JSON.parse(userDataHeader) as AuthUser;
+                if (!user.id && user.userId) user.id = user.userId;
+                
+                if (requiredPerfil && !requiredPerfil.includes(user.perfil)) {
+                    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
+                }
+                return handler(req, user, context);
+            } catch (e) {
+                console.error('[withAuth] Erro ao carregar x-user-data:', e);
+            }
+        }
+
+        // 2. Fallback: Tenta pegar token do header (Authorization: Bearer ...) OU do cookie
         const authHeader = req.headers.get('authorization');
         const cookieToken = req.cookies.get('access_token')?.value;
         const token = authHeader?.replace('Bearer ', '') || cookieToken;
@@ -27,6 +43,7 @@ export function withAuth(
         if (!payload) {
             return NextResponse.json({ error: 'Token inválido ou expirado' }, { status: 401 });
         }
+
 
         const user = payload as AuthUser;
         if (!user.id && user.userId) user.id = user.userId;

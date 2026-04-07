@@ -8,9 +8,11 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
 }
 
 // Client com service role key (Bypass RLS)
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-    auth: {
-        autoRefreshToken: false,
-        persistSession: false
-    }
-});
+export const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey) 
+    ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    })
+    : null as any;

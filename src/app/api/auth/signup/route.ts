@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server';
-
-export const dynamic = 'force-dynamic';
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import bcrypt from 'bcryptjs';
 
-export async function POST(req: Request) {
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: NextRequest) {
     try {
         const { nome, clinicaNome, email, senha } = await req.json();
 
@@ -12,62 +12,83 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: 'Campos obrigatórios ausentes' }, { status: 400 });
         }
 
-        // Verifica se usuário já existe
-        const usuarioExistente = await prisma.usuario.findFirst({
-            where: { email }
-        });
+        // 1. Verifica se usuário já existe
+        const { data: usuarioExistente } = await supabaseAdmin
+            .from('Usuario')
+            .select('id')
+            .eq('email', email.toLowerCase())
+            .maybeSingle();
 
         if (usuarioExistente) {
             return NextResponse.json({ success: false, error: 'E-mail já cadastrado' }, { status: 400 });
         }
 
-        // Cria slug para a clínica
+        // 2. Cria slug para a clínica
         const slug = clinicaNome.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
-
-        // Password Hash
         const hashedSenha = await bcrypt.hash(senha, 10);
+        const nowDate = new Date().toISOString();
 
-        // Cria Clínica e Usuário Administrador (Transação)
-        const result = await prisma.$transaction(async (tx) => {
-            const clinica = await tx.clinica.create({
-                data: {
-                    nome: clinicaNome,
-                    slug,
-                    configuracoes: {
-                        create: {
-                            diasInatividade: 30,
-                            slaMinutos: 60
-                        }
-                    },
-                    kanbanColunas: {
-                        createMany: {
-                            data: [
-                                { nome: 'Novo Lead', cor: '#1A73E8', ordem: 0, slug: 'novo-lead' },
-                                { nome: 'Em Atendimento', cor: '#FBBC04', ordem: 1, slug: 'em-atendimento' },
-                                { nome: 'Agendado', cor: '#34A853', ordem: 2, slug: 'agendado' },
-                                { nome: 'Finalizado', cor: '#5F6368', ordem: 3, slug: 'finalizado' }
-                            ]
-                        }
-                    }
-                }
-            });
+        // 3. Cria Clínica (Manual Transaction simulation)
+        const { data: clinica, error: cError } = await supabaseAdmin
+            .from('Clinica')
+            .insert({
+                id: crypto.randomUUID(),
+                nome: clinicaNome,
+                slug,
+                createdAt: nowDate,
+                updatedAt: nowDate
+            })
+            .select()
+            .single();
 
-            const usuario = await tx.usuario.create({
-                data: {
+        if (cError || !clinica) throw cError;
+
+        try {
+            // 4. Cria Configurações e Colunas Kanban
+            await Promise.all([
+                supabaseAdmin.from('ConfiguracaoClinica').insert({
+                    clinicaId: clinica.id,
+                    diasInatividade: 30,
+                    slaMinutos: 60,
+                    updatedAt: nowDate
+                }),
+                supabaseAdmin.from('KanbanColuna').insert([
+                    { clinicaId: clinica.id, nome: 'Novo Lead', cor: '#1A73E8', ordem: 0, slug: 'novo-lead', tipo: 'ATENDIMENTO' },
+                    { clinicaId: clinica.id, nome: 'Em Atendimento', cor: '#FBBC04', ordem: 1, slug: 'em-atendimento', tipo: 'ATENDIMENTO' },
+                    { clinicaId: clinica.id, nome: 'Agendado', cor: '#34A853', ordem: 2, slug: 'agendado', tipo: 'ATENDIMENTO' },
+                    { clinicaId: clinica.id, nome: 'Finalizado', cor: '#5F6368', ordem: 3, slug: 'finalizado', tipo: 'ATENDIMENTO' }
+                ])
+            ]);
+
+            // 5. Cria Usuário
+            const { data: usuario, error: uError } = await supabaseAdmin
+                .from('Usuario')
+                .insert({
+                    id: crypto.randomUUID(),
                     nome,
-                    email,
+                    email: email.toLowerCase(),
                     senha: hashedSenha,
                     perfil: 'ADMIN',
-                    clinicaId: clinica.id
-                }
-            });
+                    clinicaId: clinica.id,
+                    createdAt: nowDate,
+                    updatedAt: nowDate
+                })
+                .select()
+                .single();
 
-            return { clinica, usuario };
-        });
+            if (uError) throw uError;
 
-        return NextResponse.json({ success: true, data: result });
+            return NextResponse.json({ success: true, data: { clinica, usuario } });
+
+        } catch (innerError) {
+            // Rollback manual da clínica se algo falhar no processo secundário
+            await supabaseAdmin.from('Clinica').delete().eq('id', clinica.id);
+            throw innerError;
+        }
+
     } catch (error: any) {
         console.error('Erro no Signup:', error);
         return NextResponse.json({ success: false, error: error.message || 'Erro interno no servidor' }, { status: 500 });
     }
 }
+

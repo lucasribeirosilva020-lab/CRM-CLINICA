@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import { withAuth } from '@/lib/api-middleware';
 
 // PUT - Atualiza uma coluna existente (Nome e Cor)
@@ -15,15 +15,15 @@ export const PUT = withAuth(async (req: NextRequest, user: any, context: any) =>
         const body = await req.json();
         const { nome, cor } = body;
 
-        // O slug não é alterado, apenas nome visual e cor. 
-        // Os cards estão linkados pelo slug, então manter o slug não quebra as ligações.
-        const atualizada = await prisma.kanbanColuna.update({
-            where: {
-                id,
-                clinicaId // Garantir segurança do tenant
-            },
-            data: { nome, cor }
-        });
+        const { data: atualizada, error: uError } = await supabaseAdmin
+            .from('KanbanColuna')
+            .update({ nome, cor, updatedAt: new Date().toISOString() })
+            .eq('id', id)
+            .eq('clinicaId', clinicaId)
+            .select()
+            .single();
+
+        if (uError) throw uError;
 
         return NextResponse.json({ success: true, data: atualizada });
     } catch (error: any) {
@@ -42,37 +42,44 @@ export const DELETE = withAuth(async (req: NextRequest, user: any, context: any)
     }
 
     try {
-        // Primeiro busca a coluna para descobrir o seu slug e seu tipo
-        const coluna = await prisma.kanbanColuna.findUnique({
-            where: { id, clinicaId }
-        });
+        // 1. Busca a coluna para descobrir o seu slug e seu tipo
+        const { data: coluna, error: fError } = await supabaseAdmin
+            .from('KanbanColuna')
+            .select('slug, tipo')
+            .eq('id', id)
+            .eq('clinicaId', clinicaId)
+            .single();
 
-        if (!coluna) {
+        if (fError || !coluna) {
             return NextResponse.json({ success: false, error: 'Coluna não encontrada' }, { status: 404 });
         }
 
-        // Verifica se existem conversas associadas a este slug neste kanban
-        const campoStatus = coluna.tipo === 'ATENDIMENTO' ? 'kanbanAtenStat' : 'kanbanVendStat';
+        // 2. Verifica se existem conversas associadas a este slug neste kanban
+        const campoStatus = (coluna as any).tipo === 'ATENDIMENTO' ? 'kanbanAtenStat' : 'kanbanVendStat';
 
-        const cardsAgregados = await prisma.conversa.count({
-            where: {
-                clinicaId,
-                [campoStatus]: coluna.slug,
-                encerrada: false // Podemos ou não verificar conversas ativas.
-            }
-        });
+        const { count, error: cError } = await supabaseAdmin
+            .from('Conversa')
+            .select('*', { count: 'exact', head: true })
+            .eq('clinicaId', clinicaId)
+            .eq(campoStatus, (coluna as any).slug);
 
-        if (cardsAgregados > 0) {
+        if (cError) throw cError;
+
+        if (count && count > 0) {
             return NextResponse.json({
                 success: false,
-                error: `Esta coluna não pode ser excluída pois possui ${cardsAgregados} card(s). Movimente-os antes de excluir.`
+                error: `Esta coluna não pode ser excluída pois possui ${count} card(s). Movimente-os antes de excluir.`
             }, { status: 400 });
         }
 
-        // Exclui a coluna
-        await prisma.kanbanColuna.delete({
-            where: { id, clinicaId }
-        });
+        // 3. Exclui a coluna
+        const { error: dError } = await supabaseAdmin
+            .from('KanbanColuna')
+            .delete()
+            .eq('id', id)
+            .eq('clinicaId', clinicaId);
+
+        if (dError) throw dError;
 
         return NextResponse.json({ success: true });
     } catch (error: any) {
@@ -80,3 +87,4 @@ export const DELETE = withAuth(async (req: NextRequest, user: any, context: any)
         return NextResponse.json({ success: false, error: 'Erro ao excluir coluna' }, { status: 500 });
     }
 });
+

@@ -37,46 +37,46 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen bg-secondary flex items-center justify-center p-4">
+        <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
             {/* Background decoration */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-primary/5" />
-                <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-primary/5" />
+                <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-primary/5 blur-[120px]" />
+                <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full bg-secondary/20 blur-[120px]" />
             </div>
 
             <div className="w-full max-w-sm relative animate-fade-in">
                 {/* Card */}
-                <div className="bg-white rounded-2xl border border-border p-8 shadow-modal">
+                <div className="bg-white p-10 rounded-[32px] shadow-xl border border-gray-200">
                     {/* Logo */}
-                    <div className="flex flex-col items-center mb-8">
-                        <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mb-4 shadow-card">
-                            <Activity className="w-7 h-7 text-white" />
+                    <div className="flex flex-col items-center mb-10">
+                        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary to-primary-400 flex items-center justify-center mb-6 shadow-2xl shadow-primary/20 scale-110">
+                            <Activity className="w-10 h-10 text-white" />
                         </div>
-                        <h1 className="text-xl font-bold text-text">CRM Clínica</h1>
-                        <p className="text-sm text-text-muted mt-1">Faça login para continuar</p>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tighter">Clinify</h1>
+                        <p className="text-xs font-bold text-primary/60 uppercase tracking-[0.2em] mt-2">Health Management</p>
                     </div>
 
                     {/* Error */}
                     {erro && (
-                        <div className="mb-4 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-error/10 border border-error/20">
-                            <AlertCircle className="w-4 h-4 text-error flex-shrink-0" />
-                            <p className="text-sm text-error">{erro}</p>
+                        <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-2xl bg-error/10 border border-error/20 animate-slide-in-up">
+                            <AlertCircle className="w-5 h-5 text-error flex-shrink-0" />
+                            <p className="text-sm font-semibold text-error">{erro}</p>
                         </div>
                     )}
 
                     {/* Form */}
-                    <form onSubmit={handleSubmit} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
-                            <label className="label" htmlFor="email">E-mail</label>
-                            <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-light" />
+                            <label className="label text-gray-500 ml-1" htmlFor="email">E-mail Corporativo</label>
+                            <div className="relative group">
+                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
                                 <input
                                     id="email"
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="seu@email.com"
-                                    className="input pl-9"
+                                    placeholder="seu@clinify.com"
+                                    className="input !pl-16 h-12"
                                     autoComplete="email"
                                     disabled={loading}
                                 />
@@ -84,25 +84,25 @@ export default function LoginPage() {
                         </div>
 
                         <div>
-                            <label className="label" htmlFor="senha">Senha</label>
-                            <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-light" />
+                            <label className="label text-gray-500 ml-1" htmlFor="senha">Senha de Acesso</label>
+                            <div className="relative group">
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
                                 <input
                                     id="senha"
                                     type={showSenha ? 'text' : 'password'}
                                     value={senha}
                                     onChange={(e) => setSenha(e.target.value)}
                                     placeholder="••••••••"
-                                    className="input pl-9 pr-10"
+                                    className="input !pl-16 !pr-16 h-12"
                                     autoComplete="current-password"
                                     disabled={loading}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowSenha(!showSenha)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-light hover:text-text transition-colors"
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
                                 >
-                                    {showSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    {showSenha ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
                             </div>
                         </div>
@@ -110,52 +110,24 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="btn-primary w-full justify-center py-2.5 mt-2"
+                            className="btn-primary w-full h-12 justify-center text-base"
                         >
                             {loading ? (
-                                <span className="flex items-center gap-2">
-                                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                                <span className="flex items-center gap-3 font-bold">
+                                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                     </svg>
-                                    Entrando...
+                                    Autenticando...
                                 </span>
-                            ) : 'Entrar'}
+                            ) : 'Entrar na Plataforma'}
                         </button>
                     </form>
 
-                    {/* Credenciais demo */}
-                    <div className="mt-6 p-3 rounded-xl bg-secondary border border-primary/10">
-                        <p className="text-xs font-semibold text-primary mb-2">🔑 Credenciais de demonstração</p>
-                        <div className="space-y-1">
-                            {[
-                                { label: 'Admin', email: 'admin@crm.com', senha: 'admin123' },
-                                { label: 'Vendedor', email: 'vendedor@crm.com', senha: 'vendedor123' },
-                                { label: 'Atendente', email: 'atendente@crm.com', senha: 'atendente123' },
-                            ].map((c) => (
-                                <button
-                                    key={c.email}
-                                    type="button"
-                                    onClick={() => { setEmail(c.email); setSenha(c.senha); }}
-                                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-primary/10 transition-colors"
-                                >
-                                    <span className="text-xs font-medium text-primary">{c.label}:</span>
-                                    <span className="text-xs text-text-muted ml-1">{c.email}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
                 </div>
 
-                <p className="text-center text-xs text-text-muted mt-4">
-                    Não tem uma conta?{' '}
-                    <Link href="/signup" className="text-primary font-bold hover:underline">
-                        Cadastre sua Clínica
-                    </Link>
-                </p>
-
-                <p className="text-center text-[10px] text-text-muted mt-2">
-                    CRM Clínica v1.0 — Sistema de Gestão
+                <p className="text-center text-xs text-gray-400 mt-8">
+                    © 2024 Clinify • Todos os direitos reservados
                 </p>
             </div>
         </div>

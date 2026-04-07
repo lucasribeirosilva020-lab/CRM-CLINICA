@@ -58,7 +58,7 @@ export default function SignupPage() {
                 <div className="bg-white rounded-2xl border border-border p-8 shadow-modal">
                     <div className="flex flex-col items-center mb-8">
                         <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mb-4 shadow-card">
-                            <Activity className="w-7 h-7 text-white" />
+                            <Activity className="w-7 h-7 text-gray-900" />
                         </div>
                         <h1 className="text-xl font-bold text-text">Criar Nova Conta</h1>
                         <p className="text-sm text-text-muted mt-1">Sua jornada começa aqui</p>

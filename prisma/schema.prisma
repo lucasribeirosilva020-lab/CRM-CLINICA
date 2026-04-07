@@ -40,6 +40,8 @@ model ConfiguracaoClinica {
   slaMinutos            Int      @default(60)
   whatsappConectado     Boolean  @default(false)
   whatsappSessao        String?
+  whatsappModo          String   @default("uazapi") // 'uazapi' | 'n8n'
+  webhookN8nUrl         String?
   clinica               Clinica  @relation(fields: [clinicaId], references: [id])
   updatedAt             DateTime @updatedAt
 }

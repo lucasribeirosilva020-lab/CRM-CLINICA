@@ -1,40 +1,40 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import { withAuth } from '@/lib/api-middleware';
 
-export const POST = withAuth(async (req, { user }: any) => {
+export const POST = withAuth(async (req: NextRequest, { user }: any) => {
     try {
-        const { valorMeta } = await req.json();
+        const { valorMeta, metasIndividuais } = await req.json();
         const clinicaId = user.clinicaId;
         const agora = new Date();
         const mes = agora.getMonth() + 1;
         const ano = agora.getFullYear();
 
-        // Upsert para a meta global do mês (vendedorId: null)
-        const metaDoc = await prisma.meta.findFirst({
-            where: { clinicaId, mes, ano, vendedorId: null }
-        });
+        const metasData: { clinicaId: string, mes: number, ano: number, valorMeta: number, vendedorId: string | null, updatedAt: string }[] = [
+            { clinicaId, mes, ano, valorMeta, vendedorId: null, updatedAt: agora.toISOString() }
+        ];
 
-        if (metaDoc) {
-            await prisma.meta.update({
-                where: { id: metaDoc.id },
-                data: { valorMeta }
-            });
-        } else {
-            await prisma.meta.create({
-                data: {
-                    clinicaId,
-                    mes,
-                    ano,
-                    valorMeta,
-                    vendedorId: null
-                }
+        if (metasIndividuais && Array.isArray(metasIndividuais)) {
+            metasIndividuais.forEach((m: { vendedorId: string, valorMeta: number }) => {
+                metasData.push({
+                    clinicaId, mes, ano,
+                    vendedorId: m.vendedorId,
+                    valorMeta: m.valorMeta,
+                    updatedAt: agora.toISOString()
+                });
             });
         }
 
+        const { error: upsertError } = await supabaseAdmin
+            .from('Meta')
+            .upsert(metasData, { onConflict: 'clinicaId,mes,ano,vendedorId' });
+
+        if (upsertError) throw upsertError;
+
         return NextResponse.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Erro ao salvar meta:', error);
-        return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 });
+

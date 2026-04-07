@@ -28,10 +28,10 @@ export default function GuiaUsoPage() {
                 </section>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <section className="card">
-                        <div className="flex items-center gap-3 mb-4 text-blue-500">
+                    <section className="bg-white border border-gray-200 rounded-3xl p-6 hover:border-primary/40 transition-all">
+                        <div className="flex items-center gap-3 mb-4 text-primary">
                             <MessageSquare className="w-5 h-5" />
-                            <h2 className="text-base font-bold">Conversas</h2>
+                            <h2 className="text-base font-bold text-gray-900">Conversas</h2>
                         </div>
                         <ul className="text-sm text-text-muted space-y-2">
                             <li>• Centralize todos os contatos do WhatsApp.</li>
@@ -40,10 +40,10 @@ export default function GuiaUsoPage() {
                         </ul>
                     </section>
 
-                    <section className="card">
-                        <div className="flex items-center gap-3 mb-4 text-purple-500">
+                    <section className="bg-white border border-gray-200 rounded-3xl p-6 hover:border-primary/40 transition-all">
+                        <div className="flex items-center gap-3 mb-4 text-emerald-400">
                             <Columns className="w-5 h-5" />
-                            <h2 className="text-base font-bold">Kanban</h2>
+                            <h2 className="text-base font-bold text-gray-900">Kanban</h2>
                         </div>
                         <ul className="text-sm text-text-muted space-y-2">
                             <li>• Visualize o progresso dos leads por colunas.</li>
@@ -52,10 +52,10 @@ export default function GuiaUsoPage() {
                         </ul>
                     </section>
 
-                    <section className="card">
-                        <div className="flex items-center gap-3 mb-4 text-green-500">
+                    <section className="bg-white border border-gray-200 rounded-3xl p-6 hover:border-primary/40 transition-all">
+                        <div className="flex items-center gap-3 mb-4 text-primary">
                             <BarChart2 className="w-5 h-5" />
-                            <h2 className="text-base font-bold">Relatórios de SLA</h2>
+                            <h2 className="text-base font-bold text-gray-900">Relatórios de SLA</h2>
                         </div>
                         <ul className="text-sm text-text-muted space-y-2">
                             <li>• Monitore o tempo de resposta da equipe.</li>
@@ -64,10 +64,10 @@ export default function GuiaUsoPage() {
                         </ul>
                     </section>
 
-                    <section className="card">
-                        <div className="flex items-center gap-3 mb-4 text-orange-500">
+                    <section className="bg-white border border-gray-200 rounded-3xl p-6 hover:border-primary/40 transition-all">
+                        <div className="flex items-center gap-3 mb-4 text-gray-400">
                             <Shield className="w-5 h-5" />
-                            <h2 className="text-base font-bold">Privacidade</h2>
+                            <h2 className="text-base font-bold text-gray-900">Privacidade</h2>
                         </div>
                         <ul className="text-sm text-text-muted space-y-2">
                             <li>• Dados isolados por clínica (Multi-tenancy).</li>

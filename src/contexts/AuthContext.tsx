@@ -29,28 +29,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Verificar sessão ao carregar
     useEffect(() => {
-        console.log('[AuthContext] Iniciando verificação de sessão...');
-        const storedUser = localStorage.getItem('crm_user');
-        if (storedUser) {
-            try {
-                const parsed = JSON.parse(storedUser);
-                console.log('[AuthContext] Usuário encontrado no localStorage:', parsed.nome);
-                setUsuario(parsed);
-            } catch (err) {
-                console.error('[AuthContext] Erro ao parsear usuário:', err);
-                localStorage.removeItem('crm_user');
+        const checkSession = async () => {
+            console.log('[AuthContext] Initializing session check...');
+            const storedUser = localStorage.getItem('crm_user');
+            
+            if (storedUser) {
+                try {
+                    const parsed = JSON.parse(storedUser);
+                    console.log('[AuthContext] Session found for:', parsed.email);
+                    setUsuario(parsed);
+                } catch (err) {
+                    console.error('[AuthContext] Failed to parse session:', err);
+                    localStorage.removeItem('crm_user');
+                }
+            } else {
+                console.log('[AuthContext] No local session found');
             }
-        } else {
-            console.log('[AuthContext] Nenhum usuário no localStorage');
-        }
 
-        // Failsafe: garante que o loading termine mesmo se algo der errado
-        const timer = setTimeout(() => {
-            console.log('[AuthContext] Finalizando loading');
-            setLoading(false);
-        }, 100);
+            // Small delay to allow Next.js routing to stabilize
+            setTimeout(() => {
+                console.log('[AuthContext] Ready');
+                setLoading(false);
+            }, 50);
+        };
 
-        return () => clearTimeout(timer);
+        checkSession();
     }, []);
 
     const login = useCallback(async (email: string, senha: string) => {
@@ -86,16 +89,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.location.href = '/login';
     }, []);
 
-    return (
+        const perfilUpper = usuario?.perfil?.toUpperCase() || '';
+        
+        return (
         <AuthContext.Provider
             value={{
                 usuario,
                 loading,
                 login,
                 logout,
-                isAdmin: usuario?.perfil === 'ADMIN',
-                isVendedor: usuario?.perfil === 'VENDEDOR' || usuario?.perfil === 'ADMIN',
-                isAtendente: usuario?.perfil === 'ATENDENTE' || usuario?.perfil === 'ADMIN',
+                isAdmin: perfilUpper === 'ADMIN',
+                isVendedor: perfilUpper === 'VENDEDOR' || perfilUpper === 'ADMIN',
+                isAtendente: perfilUpper === 'ATENDENTE' || perfilUpper === 'ADMIN',
             }}
         >
             {children}

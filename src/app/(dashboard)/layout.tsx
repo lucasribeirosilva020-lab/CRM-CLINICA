@@ -22,7 +22,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-secondary">
+            <div className="min-h-screen flex items-center justify-center bg-background">
                 <div className="flex flex-col items-center gap-3">
                     <div className="w-10 h-10 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
                     <p className="text-sm text-text-muted font-medium">Carregando...</p>
@@ -34,7 +34,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!usuario) return null;
 
     return (
-        <div className="flex h-screen overflow-hidden bg-gray-50">
+        <div className="flex h-screen overflow-hidden bg-background">
             <Sidebar />
             <div className="flex-1 flex flex-col overflow-hidden">
                 <main className="flex-1 overflow-y-auto pb-16 md:pb-0">

@@ -12,23 +12,38 @@ interface GanhoVendaModalProps {
 
 export default function GanhoVendaModal({ leadNome, onClose, onConfirm }: GanhoVendaModalProps) {
     const [valor, setValor] = useState<string>('');
-    const [vendedorId, setVendedorId] = useState<string>('0');
+    const [vendedorId, setVendedorId] = useState<string>('');
     const [servico, setServico] = useState<string>('');
     const [origem, setOrigem] = useState<string>('Google ADS');
     const [pagamento, setPagamento] = useState<string>('Cartão de Crédito');
     const [vendedores, setVendedores] = useState<{ nome: string, id: string }[]>([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const localVendedores = localStorage.getItem('crm_vendedores');
-        if (localVendedores) {
-            const parsed = JSON.parse(localVendedores);
-            setVendedores(parsed.map((v: any, i: number) => ({ nome: v.nome, id: String(i) })));
-        } else {
-            setVendedores([
-                { nome: 'Carlos Vendedor', id: '0' },
-                { nome: 'Admin Sistema', id: '1' }
-            ]);
-        }
+        const fetchVendedores = async () => {
+            try {
+                setLoading(true);
+                const res = await fetch('/api/users');
+                const json = await res.json();
+                
+                if (json.success && Array.isArray(json.data)) {
+                    setVendedores(json.data.map((u: any) => ({
+                        nome: u.nome,
+                        id: u.id
+                    })));
+                    
+                    if (json.data.length > 0) {
+                        setVendedorId(json.data[0].id);
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao buscar vendedores:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchVendedores();
     }, []);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -42,25 +57,25 @@ export default function GanhoVendaModal({ leadNome, onClose, onConfirm }: GanhoV
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 animate-fade-in">
-            <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-scale-in">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 p-4 animate-fade-in text-gray-900">
+            <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-scale-in">
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-success/5">
+                <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-emerald-50">
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-success/20 flex items-center justify-center">
-                            <TrendingUp className="w-5 h-5 text-success" />
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                            <TrendingUp className="w-5 h-5 text-emerald-600" />
                         </div>
-                        <h2 className="text-lg font-bold text-text">Dar Ganho na Venda</h2>
+                        <h2 className="text-lg font-bold">Dar Ganho na Venda</h2>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                        <X className="w-5 h-5 text-text-muted" />
+                        <X className="w-5 h-5 text-gray-400" />
                     </button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    <div className="bg-gray-50 p-3 rounded-xl border border-border">
-                        <p className="text-xs text-text-muted mb-1">Lead</p>
-                        <p className="text-sm font-semibold text-text">{leadNome}</p>
+                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-200">
+                        <p className="text-xs text-gray-500 mb-1 uppercase tracking-widest font-bold">Lead</p>
+                        <p className="text-sm font-semibold text-gray-900">{leadNome}</p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -88,10 +103,17 @@ export default function GanhoVendaModal({ leadNome, onClose, onConfirm }: GanhoV
                                 onChange={(e) => setVendedorId(e.target.value)}
                                 className="input py-2 text-sm"
                                 required
+                                disabled={loading}
                             >
-                                {vendedores.map((v) => (
-                                    <option key={v.id} value={v.id}>{v.nome}</option>
-                                ))}
+                                {loading ? (
+                                    <option value="" disabled>Carregando...</option>
+                                ) : vendedores.length === 0 ? (
+                                    <option value="" disabled>Nenhum vendedor encontrado</option>
+                                ) : (
+                                    vendedores.map((v) => (
+                                        <option key={v.id} value={v.id}>{v.nome}</option>
+                                    ))
+                                )}
                             </select>
                         </div>
                     </div>
@@ -156,7 +178,7 @@ export default function GanhoVendaModal({ leadNome, onClose, onConfirm }: GanhoV
                         </button>
                         <button
                             type="submit"
-                            className="btn-primary flex-1 justify-center py-2 text-sm bg-success hover:bg-success-600 border-none shadow-lg shadow-success/20"
+                            className="btn-primary flex-1 justify-center py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold border-none shadow-lg shadow-emerald-500/20"
                         >
                             Confirmar Ganho
                         </button>

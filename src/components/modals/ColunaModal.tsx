@@ -5,7 +5,7 @@ interface ColunaModalProps {
     isOpen: boolean;
     onClose: () => void;
     coluna?: { id: string; nome: string; cor: string } | null;
-    tipo: 'ATENDIMENTO' | 'VENDAS';
+    tipo: 'ATENDIMENTO' | 'VENDAS' | 'LTVS';
     onSalvar: (nome: string, cor: string, id?: string) => Promise<boolean>;
 }
 
@@ -57,19 +57,19 @@ export default function ColunaModal({ isOpen, onClose, coluna, tipo, onSalvar }:
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 animate-fade-in text-gray-900">
             <div
-                className="bg-white rounded-2xl w-full max-w-sm shadow-xl flex flex-col animate-scale-up"
+                className="bg-white border border-gray-200 rounded-2xl w-full max-w-sm shadow-xl flex flex-col animate-scale-up"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-border">
-                    <h2 className="text-lg font-bold text-text">
+                <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+                    <h2 className="text-lg font-bold">
                         {coluna ? 'Editar Coluna' : 'Nova Coluna'}
                     </h2>
                     <button
                         onClick={onClose}
-                        className="p-2 rounded-full hover:bg-gray-100 text-text-muted transition-colors"
+                        className="p-2 rounded-full hover:bg-gray-100 text-gray-400 transition-colors"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -102,17 +102,17 @@ export default function ColunaModal({ isOpen, onClose, coluna, tipo, onSalvar }:
                                     key={c}
                                     type="button"
                                     onClick={() => setCor(c)}
-                                    className="w-8 h-8 rounded-full border border-black/10 flex items-center justify-center transition-transform hover:scale-110"
+                                    className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center transition-transform hover:scale-110 shadow-lg"
                                     style={{ backgroundColor: c }}
                                 >
-                                    {cor === c && <Check className="w-4 h-4 text-black/60 mix-blend-difference" />}
+                                    {cor === c && <Check className="w-4 h-4 text-gray-900" />}
                                 </button>
                             ))}
                         </div>
                     </div>
 
                     <p className="text-[10px] text-text-muted pt-2 text-center">
-                        Esta coluna ficará disponível no <strong>Kanban de {tipo === 'ATENDIMENTO' ? 'Atendimento' : 'Vendas'}</strong>.
+                        Esta coluna ficará disponível no <strong>Kanban de {tipo === 'ATENDIMENTO' ? 'Atendimento' : tipo === 'LTVS' ? 'Leads Perdidos' : 'Vendas'}</strong>.
                     </p>
 
                     <div className="flex gap-2 pt-2">

@@ -43,7 +43,7 @@ export default function DropdownMenu({ trigger, items, align = 'right' }: Dropdo
 
             {isOpen && (
                 <div className={cn(
-                    'absolute z-50 mt-2 w-48 rounded-xl bg-white shadow-lg border border-border py-1 animate-in fade-in zoom-in duration-200',
+                    'absolute z-50 mt-2 w-56 rounded-xl bg-white shadow-xl border border-gray-200 py-1.5 animate-in fade-in zoom-in duration-200',
                     align === 'right' ? 'right-0' : 'left-0'
                 )}>
                     {items.map((item, index) => (
@@ -54,11 +54,13 @@ export default function DropdownMenu({ trigger, items, align = 'right' }: Dropdo
                                 setIsOpen(false);
                             }}
                             className={cn(
-                                'w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-50',
-                                item.variant === 'danger' ? 'text-error hover:bg-error/5' : 'text-text'
+                                'w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors rounded-lg mx-1 my-0.5 w-[calc(100%-8px)]',
+                                item.variant === 'danger'
+                                    ? 'text-red-500 hover:bg-red-50 hover:text-red-600'
+                                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                             )}
                         >
-                            {item.icon && <item.icon className="w-4 h-4" />}
+                            {item.icon && <item.icon className="w-4 h-4 flex-shrink-0" />}
                             {item.label}
                         </button>
                     ))}

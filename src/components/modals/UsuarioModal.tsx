@@ -88,13 +88,13 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess, usuario }: Us
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-200">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                    <h3 className="text-lg font-bold text-text">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 animate-in fade-in duration-200 text-gray-900">
+            <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h3 className="text-lg font-bold">
                         {usuario ? 'Editar Membro' : 'Novo Membro da Equipe'}
                     </h3>
-                    <button onClick={onClose} className="p-2 hover:bg-secondary rounded-xl transition-colors text-text-muted">
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-400">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -159,8 +159,8 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess, usuario }: Us
                                     className={cn(
                                         "flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-sm font-medium transition-all",
                                         perfil === p
-                                            ? "bg-primary/5 border-primary text-primary"
-                                            : "border-border text-text-muted hover:bg-gray-50"
+                                            ? "bg-primary/10 border-primary text-primary"
+                                            : "bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100"
                                     )}
                                 >
                                     {perfil === p && <Check className="w-3.5 h-3.5" />}
@@ -189,14 +189,14 @@ export default function UsuarioModal({ isOpen, onClose, onSuccess, usuario }: Us
                         <button
                             type="button"
                             onClick={onClose}
-                            className="btn-ghost flex-1 justify-center"
+                            className="btn-ghost flex-1 justify-center text-gray-500"
                         >
                             Cancelar
                         </button>
                         <button
                             type="submit"
                             disabled={loading}
-                            className="btn-primary flex-1 justify-center"
+                            className="btn-primary flex-1 justify-center shadow-lg shadow-primary/20"
                         >
                             {loading ? 'Salvando...' : 'Salvar Alterações'}
                         </button>

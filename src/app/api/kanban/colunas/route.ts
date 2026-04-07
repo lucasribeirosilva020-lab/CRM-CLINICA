@@ -47,12 +47,21 @@ export const GET = withAuth(async (req: NextRequest, user: any) => {
                 { nome: 'Negociação', cor: '#FCE8E6', slug: 'negociacao' },
             ];
 
-            const defaults = tipo === 'ATENDIMENTO' ? defaultAtendimento : defaultVendas;
+            const defaultLtvs = [
+                { nome: 'Sem Interesse', cor: '#FCE8E6', slug: 'sem_interesse' },
+                { nome: 'Caro / Sem Orçamento', cor: '#FEF7E0', slug: 'caro' },
+                { nome: 'Não Respondia', cor: '#E8EAED', slug: 'nao_respondia' },
+                { nome: 'Concorrente', cor: '#E8F0FE', slug: 'concorrente' },
+                { nome: 'Outro Motivo', cor: '#F3F4F6', slug: 'outro_motivo' },
+            ];
+
+            const defaults = tipo === 'ATENDIMENTO' ? defaultAtendimento : (tipo === 'VENDAS' ? defaultVendas : defaultLtvs);
 
             // Cria todas em lote via upsert ou insert
             const { error: iError } = await supabaseAdmin
                 .from('KanbanColuna')
                 .insert(defaults.map((col, index) => ({
+                    id: crypto.randomUUID(),
                     clinicaId,
                     tipo,
                     nome: col.nome,
@@ -131,6 +140,7 @@ export const POST = withAuth(async (req: NextRequest, user: any) => {
         const { data: novaColuna, error: cError } = await supabaseAdmin
             .from('KanbanColuna')
             .insert({
+                id: crypto.randomUUID(),
                 clinicaId,
                 tipo,
                 nome,

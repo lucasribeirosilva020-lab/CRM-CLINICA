@@ -5,16 +5,25 @@
 @tailwind utilities;
 
 :root {
-  --color-primary: #1A73E8;
-  --color-secondary: #E8F0FE;
-  --color-success: #34A853;
-  --color-warning: #FBBC04;
-  --color-error: #EA4335;
-  --color-border: #E0E0E0;
-  --color-text: #1C1C1E;
-  --color-bg: #FFFFFF;
-  --color-bg-soft: #F8F9FA;
-  --radius: 12px;
+  --color-primary: #1B4332;
+  --color-secondary: #D8F3DC;
+  --color-primary-400: #2D6A4F;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-border: #E5E7EB;
+  --color-text: #1A1A1A;
+  --color-text-muted: #6B7280;
+  --color-bg: #F5F5F0;
+  --color-bg-soft: #F0F0EB;
+  --radius: 24px;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(229, 231, 235, 0.8);
 }
 
 * {
@@ -27,7 +36,7 @@ html, body {
   height: 100%;
   font-family: 'Inter', 'Poppins', system-ui, sans-serif;
   color: var(--color-text);
-  background: var(--color-bg-soft);
+  background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -55,7 +64,7 @@ html, body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background: linear-gradient(90deg, #E5E7EB 25%, #F3F4F6 50%, #E5E7EB 75%);
   background-size: 1000px 100%;
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius);
@@ -79,29 +88,33 @@ html, body {
 
 /* Botão primário padrão */
 .btn-primary {
-  @apply inline-flex items-center gap-2 px-4 py-2 bg-primary text-white font-medium rounded-xl hover:bg-primary-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-primary/30;
+  @apply inline-flex items-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-2xl hover:bg-primary-400 transition-all duration-300 shadow-lg shadow-primary/10 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-primary/20 active:scale-95;
 }
 
 .btn-secondary {
-  @apply inline-flex items-center gap-2 px-4 py-2 bg-secondary text-primary font-medium rounded-xl hover:bg-primary-100 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-primary/20;
+  @apply inline-flex items-center gap-2 px-6 py-3 bg-secondary text-primary font-bold rounded-2xl hover:bg-secondary-300 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none active:scale-95;
 }
 
 .btn-ghost {
-  @apply inline-flex items-center gap-2 px-4 py-2 text-text font-medium rounded-xl hover:bg-gray-100 transition-all duration-200 focus:outline-none;
+  @apply inline-flex items-center gap-2 px-4 py-2 text-text-muted font-medium rounded-2xl hover:bg-gray-100 hover:text-text transition-all duration-200 focus:outline-none;
 }
 
 .btn-danger {
-  @apply inline-flex items-center gap-2 px-4 py-2 bg-error/10 text-error font-medium rounded-xl hover:bg-error/20 transition-all duration-200;
+  @apply inline-flex items-center gap-2 px-4 py-2 bg-error/10 text-error font-medium rounded-2xl hover:bg-error/20 border border-error/20 transition-all duration-200;
+}
+
+.btn-outline {
+  @apply inline-flex items-center gap-2 px-4 py-2 text-primary font-medium rounded-2xl border border-primary/30 hover:bg-primary/5 transition-all duration-200 focus:outline-none;
 }
 
 /* Card base */
 .card {
-  @apply bg-white rounded-xl border border-border p-4 shadow-soft;
+  @apply bg-white rounded-[24px] border border-gray-200 p-6 shadow-sm;
 }
 
 /* Input base */
 .input {
-  @apply w-full px-3 py-2 text-sm bg-white border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all placeholder:text-text-light;
+  @apply w-full px-4 py-3 text-sm bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all placeholder:text-gray-400 text-text;
 }
 
 .label {
@@ -126,4 +139,29 @@ html, body {
   .bottom-nav {
     padding-bottom: env(safe-area-inset-bottom);
   }
+}
+
+/* Otimizaes Mveis */
+@media (max-width: 768px) {
+  .input, .btn-primary, .btn-secondary {
+    @apply min-h-[48px]; /* Garantir rea de toque mnima de 44-48px */
+  }
+  
+  .card {
+     @apply p-4 rounded-[20px]; /* Cards um pouco menores em mobile */
+  }
+}
+
+/* Remover scrollbar mas manter funcionalidade */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Efeito de toque e seleo */
+* {
+  -webkit-tap-highlight-color: transparent;
 }

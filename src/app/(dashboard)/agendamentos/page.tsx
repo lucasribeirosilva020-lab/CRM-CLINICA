@@ -115,7 +115,7 @@ export default function CopysPage() {
     });
 
     return (
-        <div className="animate-fade-in flex flex-col h-full bg-gray-50/30">
+        <div className="animate-fade-in flex flex-col h-full bg-gray-50">
             <Header
                 title="Copys & Scripts"
                 subtitle={`${copys.length} modelos cadastrados`}
@@ -127,7 +127,7 @@ export default function CopysPage() {
             />
 
             {/* Filtros e Busca */}
-            <div className="p-4 bg-white border-b border-border space-y-4">
+            <div className="p-4 bg-gray-50 border-b border-gray-200 space-y-4">
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-light" />
                     <input
@@ -145,8 +145,8 @@ export default function CopysPage() {
                             className={cn(
                                 'px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border',
                                 categoriaAtiva === cat
-                                    ? 'bg-primary text-white border-primary shadow-sm'
-                                    : 'bg-white text-text-muted border-border hover:border-primary/50 hover:text-primary'
+                                    ? 'bg-primary text-gray-900 border-primary shadow-lg shadow-primary/20'
+                                    : 'bg-white text-gray-400 border-gray-300 hover:border-primary/50 hover:text-primary'
                             )}
                         >
                             {cat === 'TODOS' ? 'Todos' : cat}
@@ -158,44 +158,44 @@ export default function CopysPage() {
             {/* Grid de Copys */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {copysFiltradas.map(copy => (
-                    <div key={copy.id} className="card group flex flex-col hover:border-primary/40 transition-all border-2 border-transparent">
+                    <div key={copy.id} className="bg-white rounded-3xl border border-gray-200 group flex flex-col hover:border-primary/40 transition-all">
                         <div className="flex items-start justify-between mb-3">
                             <div className="flex-1 min-w-0">
                                 <span className={cn(
                                     'text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider mb-2 inline-block',
-                                    copy.categoria === 'FLUXO' ? 'bg-blue-100 text-blue-700' :
-                                        copy.categoria === 'OBJECOES' ? 'bg-orange-100 text-orange-700' :
-                                            copy.categoria === 'AUDIOS' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
+                                    copy.categoria === 'FLUXO' ? 'bg-blue-500/10 text-blue-400' :
+                                        copy.categoria === 'OBJECOES' ? 'bg-amber-500/10 text-amber-400' :
+                                            copy.categoria === 'AUDIOS' ? 'bg-primary/10 text-primary' : 'bg-emerald-500/10 text-emerald-400'
                                 )}>
                                     {copy.categoria}
                                 </span>
                                 <h3 className="text-sm font-bold text-text truncate">{copy.titulo}</h3>
                             </div>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => handleEdit(copy)} className="p-1.5 hover:bg-gray-100 rounded-lg text-text-muted">
+                                <button onClick={() => handleEdit(copy)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500">
                                     <Edit3 className="w-3.5 h-3.5" />
                                 </button>
-                                <button onClick={() => saveCopys(copys.filter(c => c.id !== copy.id))} className="p-1.5 hover:bg-error/10 rounded-lg text-text-muted hover:text-error">
+                                <button onClick={() => saveCopys(copys.filter(c => c.id !== copy.id))} className="p-1.5 hover:bg-error/10 rounded-lg text-gray-500 hover:text-error">
                                     <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                             </div>
                         </div>
 
-                        <div className="flex-1 bg-gray-50/50 rounded-xl p-3 mb-4 border border-border/50 overflow-hidden">
-                            <p className="text-xs text-text-muted italic leading-relaxed line-clamp-4">
+                        <div className="flex-1 bg-gray-50/50 rounded-2xl p-4 mb-4 border border-gray-200 overflow-hidden">
+                            <p className="text-xs text-gray-400 italic leading-relaxed line-clamp-4">
                                 "{copy.conteudo}"
                             </p>
                         </div>
 
                         {copy.audioUrl && (
-                            <div className="mb-4 p-2 bg-purple-50 rounded-xl flex items-center gap-3 border border-purple-100">
-                                <button className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-sm">
+                            <div className="mb-4 p-3 bg-primary/5 rounded-2xl flex items-center gap-3 border border-primary/10">
+                                <button className="w-8 h-8 rounded-full bg-primary text-gray-900 flex items-center justify-center shadow-lg shadow-primary/20">
                                     <Play className="w-3.5 h-3.5 fill-current" />
                                 </button>
-                                <div className="flex-1 h-1 bg-purple-200 rounded-full overflow-hidden">
-                                    <div className="w-1/3 h-full bg-purple-600" />
+                                <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+                                    <div className="w-1/3 h-full bg-primary" />
                                 </div>
-                                <span className="text-[10px] font-bold text-purple-700">Preview</span>
+                                <span className="text-[10px] font-bold text-primary">Preview Áudio</span>
                             </div>
                         )}
 
@@ -228,19 +228,17 @@ export default function CopysPage() {
                     </div>
                 )}
             </div>
-
-            {/* Modal de Criação / Edição */}
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white w-full max-w-lg rounded-3xl border border-border shadow-2xl p-6 space-y-5 animate-slide-in-up">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-md animate-fade-in">
+                    <div className="bg-white w-full max-w-lg rounded-3xl border border-gray-200 shadow-2xl p-6 space-y-5 animate-slide-in-up">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <div className="w-10 h-10 rounded-2xl bg-secondary flex items-center justify-center text-primary">
+                                <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
                                     <Sparkles className="w-5 h-5" />
                                 </div>
-                                <h2 className="text-lg font-black text-text">{editingCopy ? 'Editar Script' : 'Novo Script de Vendas'}</h2>
+                                <h2 className="text-lg font-black text-gray-900">{editingCopy ? 'Editar Script' : 'Novo Script de Vendas'}</h2>
                             </div>
-                            <button onClick={closeModal} className="w-10 h-10 flex items-center justify-center rounded-2xl hover:bg-gray-100 text-text-muted transition-colors">
+                            <button onClick={closeModal} className="w-10 h-10 flex items-center justify-center rounded-2xl hover:bg-gray-100 text-gray-400 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -312,16 +310,16 @@ export default function CopysPage() {
                     <div className="flex items-center justify-between p-6 border-b border-white/10">
                         <div className="flex items-center gap-3">
                             <div className="w-3 h-3 rounded-full bg-error animate-pulse" />
-                            <h2 className="text-white font-bold uppercase tracking-widest text-sm">Modo Teleprompter: {showTeleprompter.titulo}</h2>
+                            <h2 className="text-gray-900 font-bold uppercase tracking-widest text-sm">Modo Teleprompter: {showTeleprompter.titulo}</h2>
                         </div>
-                        <button onClick={() => setShowTeleprompter(null)} className="text-white/60 hover:text-white transition-colors">
+                        <button onClick={() => setShowTeleprompter(null)} className="text-gray-900/60 hover:text-gray-900 transition-colors">
                             <X className="w-6 h-6" />
                         </button>
                     </div>
 
                     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center overflow-hidden">
                         <div className="max-w-3xl w-full">
-                            <p className="text-3xl md:text-5xl font-bold text-white leading-tight animate-scroll-up">
+                            <p className="text-3xl md:text-5xl font-bold text-gray-900 leading-tight animate-scroll-up">
                                 {showTeleprompter.conteudo}
                             </p>
                         </div>
@@ -330,18 +328,18 @@ export default function CopysPage() {
                     <div className="p-10 border-t border-white/10 bg-black/40 flex flex-col items-center gap-6">
                         <div className="flex items-center gap-8">
                             <div className="text-center">
-                                <p className="text-white/40 text-[10px] font-bold uppercase mb-1">Tempo</p>
-                                <p className="text-2xl font-mono text-white">00:15</p>
+                                <p className="text-gray-900/40 text-[10px] font-bold uppercase mb-1">Tempo</p>
+                                <p className="text-2xl font-mono text-gray-900">00:15</p>
                             </div>
                             <button className="w-20 h-20 rounded-full bg-error flex items-center justify-center shadow-[0_0_30px_rgba(234,67,53,0.4)] hover:scale-105 transition-transform">
-                                <MicOff className="w-8 h-8 text-white" />
+                                <MicOff className="w-8 h-8 text-gray-900" />
                             </button>
                             <div className="text-center">
-                                <p className="text-white/40 text-[10px] font-bold uppercase mb-1">Status</p>
+                                <p className="text-gray-900/40 text-[10px] font-bold uppercase mb-1">Status</p>
                                 <p className="text-sm font-bold text-error">GRAVANDO...</p>
                             </div>
                         </div>
-                        <div className="max-w-md w-full flex items-center gap-4 text-white/60">
+                        <div className="max-w-md w-full flex items-center gap-4 text-gray-900/60">
                             <ChevronRight className="w-5 h-5" />
                             <p className="text-xs">Dica: Mantenha um tom de voz acolhedor e pausado. Lembre-se de sorrir enquanto fala!</p>
                         </div>

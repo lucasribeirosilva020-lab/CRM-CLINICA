@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn, getAvatarUrl } from '@/lib/utils';
 import {
@@ -21,7 +21,7 @@ const menuItems = [
         sub: [
             { href: '/kanban/atendimento', label: 'Atendimento' },
             { href: '/kanban/vendas', label: 'Vendas' },
-            { href: '/kanban/ltvs', label: 'LTVs' },
+            { href: '/kanban/ltvs', label: 'Leads Perdidos' },
         ],
     },
     {
@@ -70,7 +70,8 @@ interface SidebarProps {
 
 export default function Sidebar({ whatsappOnline = false }: SidebarProps) {
     const pathname = usePathname();
-    const { usuario, logout, isAdmin } = useAuth();
+    const router = useRouter();
+    const { usuario, logout, isAdmin, isVendedor, isAtendente } = useAuth();
     const [collapsed, setCollapsed] = useState(false);
     const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
 
@@ -83,24 +84,24 @@ export default function Sidebar({ whatsappOnline = false }: SidebarProps) {
     return (
         <aside
             className={cn(
-                'hidden md:flex flex-col h-screen bg-white border-r border-border transition-all duration-300 sticky top-0 z-30',
-                collapsed ? 'w-16' : 'w-60'
+                'hidden md:flex flex-col h-screen bg-white border-r border-gray-200 transition-all duration-300 sticky top-0 z-30',
+                collapsed ? 'w-20' : 'w-64'
             )}
         >
             {/* Logo */}
-            <div className="flex items-center gap-3 px-4 py-5 border-b border-border">
-                <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center flex-shrink-0">
-                    <Activity className="w-4 h-4 text-white" />
+            <div className="flex items-center gap-3 px-4 py-6 border-b border-gray-200">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-primary-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/20">
+                    <Activity className="w-5 h-5 text-white" />
                 </div>
                 {!collapsed && (
                     <div>
-                        <p className="text-sm font-bold text-text leading-tight">CRM Clínica</p>
-                        <p className="text-[10px] text-text-muted leading-tight">{usuario?.clinica.nome}</p>
+                        <p className="text-lg font-black text-gray-900 tracking-tight">Clinify</p>
+                        <p className="text-[10px] text-primary/80 font-bold uppercase tracking-widest">{usuario?.clinica.nome}</p>
                     </div>
                 )}
                 <button
                     onClick={() => setCollapsed(!collapsed)}
-                    className="ml-auto text-text-muted hover:text-primary transition-colors"
+                    className="ml-auto text-gray-400 hover:text-primary transition-colors p-1.5 hover:bg-gray-100 rounded-lg"
                 >
                     <ChevronLeft className={cn('w-4 h-4 transition-transform', collapsed && 'rotate-180')} />
                 </button>
@@ -108,17 +109,17 @@ export default function Sidebar({ whatsappOnline = false }: SidebarProps) {
 
             {/* Status WhatsApp */}
             {!collapsed && (
-                <div className="mx-3 mt-3 px-3 py-2 rounded-xl bg-secondary flex items-center gap-2">
+                <div className="mx-4 mt-4 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 flex items-center gap-3">
                     {whatsappOnline ? (
                         <>
-                            <Wifi className="w-3.5 h-3.5 text-success" />
-                            <span className="text-xs font-medium text-success">WhatsApp Conectado</span>
-                            <span className="ml-auto w-2 h-2 rounded-full bg-success animate-pulse" />
+                            <Wifi className="w-4 h-4 text-success" />
+                            <span className="text-xs font-bold text-gray-700 italic">Rede Ativa</span>
+                            <span className="ml-auto w-2 h-2 rounded-full bg-success shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
                         </>
                     ) : (
                         <>
-                            <WifiOff className="w-3.5 h-3.5 text-error" />
-                            <span className="text-xs font-medium text-error">Desconectado</span>
+                            <WifiOff className="w-4 h-4 text-gray-400" />
+                            <span className="text-xs font-bold text-gray-400">Desconectado</span>
                         </>
                     )}
                 </div>
@@ -132,21 +133,24 @@ export default function Sidebar({ whatsappOnline = false }: SidebarProps) {
                     const hasSubMenu = item.sub && item.sub.length > 0;
                     const isExpanded = expandedMenu === item.href;
 
+                    const handleClick = (e: React.MouseEvent) => {
+                        e.preventDefault();
+                        if (hasSubMenu) {
+                            setExpandedMenu(isExpanded ? null : item.href);
+                        } else {
+                            router.push(item.href);
+                        }
+                    };
+
                     return (
                         <div key={item.href}>
                             <button
-                                onClick={() => {
-                                    if (hasSubMenu) {
-                                        setExpandedMenu(isExpanded ? null : item.href);
-                                    } else {
-                                        window.location.href = item.href;
-                                    }
-                                }}
+                                onClick={handleClick}
                                 className={cn(
-                                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 text-left',
+                                    'w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-300 text-left',
                                     isActive
-                                        ? 'bg-secondary text-primary'
-                                        : 'text-text-muted hover:bg-gray-50 hover:text-text'
+                                        ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm'
+                                        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
                                 )}
                             >
                                 <Icon className="w-4 h-4 flex-shrink-0" />
@@ -161,15 +165,20 @@ export default function Sidebar({ whatsappOnline = false }: SidebarProps) {
                             {/* Sub items */}
                             {!collapsed && hasSubMenu && isExpanded && (
                                 <div className="ml-4 mt-1 space-y-0.5">
-                                    {item.sub!.map((sub) => (
+                                    {item.sub!.filter((sub) => {
+                                        if (isAdmin) return true;
+                                        if (isVendedor && sub.href === '/kanban/atendimento') return false;
+                                        if (isAtendente && sub.href === '/kanban/vendas') return false;
+                                        return true;
+                                    }).map((sub) => (
                                         <Link
                                             key={sub.href}
                                             href={sub.href}
                                             className={cn(
-                                                'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all',
+                                                'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all',
                                                 pathname === sub.href
-                                                    ? 'text-primary bg-secondary'
-                                                    : 'text-text-muted hover:text-text hover:bg-gray-50'
+                                                    ? 'text-primary bg-primary/5'
+                                                    : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
                                             )}
                                         >
                                             <span className="w-1.5 h-1.5 rounded-full bg-current" />
@@ -184,24 +193,24 @@ export default function Sidebar({ whatsappOnline = false }: SidebarProps) {
             </nav>
 
             {/* User profile */}
-            <div className="border-t border-border p-3">
+            <div className="border-t border-gray-200 p-4 bg-gray-50/50">
                 <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
                     <img
-                        src={usuario?.avatar || getAvatarUrl(usuario?.nome || 'U')}
+                        src={usuario?.avatar || getAvatarUrl(usuario?.nome || 'C')}
                         alt={usuario?.nome}
-                        className="w-8 h-8 rounded-full flex-shrink-0 object-cover"
+                        className="w-10 h-10 rounded-xl border-2 border-gray-200 flex-shrink-0 object-cover"
                     />
                     {!collapsed && (
                         <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-text truncate">{usuario?.nome}</p>
-                            <p className="text-[10px] text-text-muted truncate">{usuario?.perfil}</p>
+                            <p className="text-xs font-bold text-gray-900 truncate">{usuario?.nome}</p>
+                            <p className="text-[10px] text-primary/70 font-black uppercase tracking-tighter truncate">{usuario?.perfil}</p>
                         </div>
                     )}
                     {!collapsed && (
                         <button
                             onClick={logout}
                             title="Sair"
-                            className="text-text-muted hover:text-error transition-colors"
+                            className="text-gray-400 hover:text-error transition-colors p-1.5 hover:bg-error/5 rounded-lg"
                         >
                             <LogOut className="w-4 h-4" />
                         </button>

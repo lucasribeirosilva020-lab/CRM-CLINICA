@@ -76,8 +76,13 @@ export const ESPECIALIDADES_MAP: Record<string, string> = {
     TERAPIA_OCUPACIONAL: 'Terapia Ocupacional',
     PSICOPEDAGOGIA: 'Psicopedagogia',
     NEUROPSICOLOGIA: 'Neuropsicologia',
+    AVALIACAO_NEURO: 'Aval. Neuropsicológica',
+    MUSICOTERAPIA: 'Musicoterapia',
+    ARTETERAPIA: 'Arteterapia',
+    PSICOMOTRICIDADE: 'Psicomotricidade',
     FISIOTERAPIA: 'Fisioterapia',
     ABA: 'ABA (Análise do Comportamento)',
+    OUTROS: 'Outros',
     OUTRA: 'Outra',
 };
 
