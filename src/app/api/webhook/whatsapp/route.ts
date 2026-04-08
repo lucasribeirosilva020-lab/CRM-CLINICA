@@ -93,24 +93,40 @@ export async function POST(req: NextRequest) {
             const telefone = String(numeroRaw).replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
             const mensagemTexto = String(mensagemRaw);
             
-            let tipoMensagem = 'TEXTO';
+            // Novos campos diretos para mídias
+            const urlMediaDireta = body.urlMedia || body.url_media || body.urlMidia;
+            const tipoMidiaDireto = body.tipoMidia || body.tipo_midia || body.tipo;
             
-            // Lógica de Parser para mídias vindas do n8n
-            if (mensagemTexto.startsWith('[MEDIA_URL]|')) {
+            let tipoMensagem = 'TEXTO';
+            let urlMedia = urlMediaDireta || '';
+            
+            // Prioridade 1: Campos diretos (JSON limpo do n8n)
+            if (urlMediaDireta && tipoMidiaDireto) {
+                const t = String(tipoMidiaDireto).toLowerCase();
+                if (t.includes('image') || t.includes('imagem') || t.includes('foto')) tipoMensagem = 'IMAGEM';
+                else if (t.includes('audio') || t.includes('ptt')) tipoMensagem = 'AUDIO';
+                else if (t.includes('video')) tipoMensagem = 'VIDEO';
+                else if (t.includes('document') || t.includes('pdf') || t.includes('arquivo')) tipoMensagem = 'DOCUMENTO';
+                
+                fs.appendFileSync(logFile, `[PARSER JSON] Mídia direta detectada: ${tipoMensagem}\n`);
+            } 
+            // Prioridade 2: Fallback para o formato [MEDIA_URL] (Legado)
+            else if (mensagemTexto.startsWith('[MEDIA_URL]|')) {
                 const partes = mensagemTexto.split('|');
                 if (partes.length >= 3) {
+                    urlMedia = partes[1];
                     const t = partes[2].toLowerCase();
-                    if (t.includes('image') || t.includes('imagem') || t.includes('foto') || t.includes('photo')) {
-                        tipoMensagem = 'IMAGEM';
-                    } else if (t.includes('audio') || t.includes('ptt') || t.includes('voice')) {
-                        tipoMensagem = 'AUDIO';
-                    } else if (t.includes('video')) {
-                        tipoMensagem = 'VIDEO';
-                    } else if (t.includes('document') || t.includes('pdf') || t.includes('arquivo') || t.includes('file')) {
-                        tipoMensagem = 'DOCUMENTO';
-                    }
+                    if (t.includes('image') || t.includes('imagem') || t.includes('foto')) tipoMensagem = 'IMAGEM';
+                    else if (t.includes('audio') || t.includes('ptt')) tipoMensagem = 'AUDIO';
+                    else if (t.includes('video')) tipoMensagem = 'VIDEO';
+                    else if (t.includes('document') || t.includes('pdf') || t.includes('arquivo')) tipoMensagem = 'DOCUMENTO';
                 }
-                fs.appendFileSync(logFile, `[PARSER N8N] Mídia detectada: ${tipoMensagem} do termo: ${partes[2]}\n`);
+                fs.appendFileSync(logFile, `[PARSER TEXTO] Mídia via tag detectada: ${tipoMensagem}\n`);
+            }
+
+            let conteudoParaSalvar = mensagemTexto;
+            if (tipoMensagem !== 'TEXTO' && urlMedia) {
+                conteudoParaSalvar = `[MEDIA_URL]|${urlMedia}|${tipoMensagem}|${mensagemTexto || 'Mídia'}`;
             }
 
             if (telefone && mensagemTexto && mensagemTexto !== 'undefined' && mensagemTexto !== '') {
@@ -153,7 +169,7 @@ export async function POST(req: NextRequest) {
                         id: messageId,
                         clinicaId,
                         conversaId: conversa.id,
-                        conteudo: mensagemTexto,
+                        conteudo: conteudoParaSalvar,
                         tipo: tipoMensagem,
                         de: isFromMe ? 'sistema' : telefone,
                         lida: isFromMe,
@@ -163,7 +179,7 @@ export async function POST(req: NextRequest) {
                     const isPerdido = !isFromMe && (['perdido', 'ltv_perdidos', 'desqualificado'].includes(conversa.kanbanAtenStat) || ['perdido', 'ltv_perdidos', 'desqualificado'].includes(conversa.kanbanVendStat));
                     
                     await supabaseAdmin.from('Conversa').update({
-                        ultimaMensagem: mensagemTexto.includes('[MEDIA_URL]') ? '[Mídia]' : mensagemTexto,
+                        ultimaMensagem: tipoMensagem !== 'TEXTO' ? '[Mídia]' : mensagemTexto,
                         ultimaMensagemAt: nowDate,
                         updatedAt: nowDate,
                         ...(!isFromMe && { naoLidas: (conversa.naoLidas || 0) + 1 }),
