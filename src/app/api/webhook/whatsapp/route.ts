@@ -99,13 +99,18 @@ export async function POST(req: NextRequest) {
             if (mensagemTexto.startsWith('[MEDIA_URL]|')) {
                 const partes = mensagemTexto.split('|');
                 if (partes.length >= 3) {
-                    const tipoDetectado = partes[2].toUpperCase();
-                    if (tipoDetectado.includes('IMAGE') || tipoDetectado.includes('IMAGEM')) tipoMensagem = 'IMAGEM';
-                    else if (tipoDetectado.includes('AUDIO')) tipoMensagem = 'AUDIO';
-                    else if (tipoDetectado.includes('VIDEO')) tipoMensagem = 'VIDEO';
-                    else if (tipoDetectado.includes('DOCUMENT') || tipoDetectado.includes('PDF')) tipoMensagem = 'DOCUMENTO';
+                    const t = partes[2].toLowerCase();
+                    if (t.includes('image') || t.includes('imagem') || t.includes('foto') || t.includes('photo')) {
+                        tipoMensagem = 'IMAGEM';
+                    } else if (t.includes('audio') || t.includes('ptt') || t.includes('voice')) {
+                        tipoMensagem = 'AUDIO';
+                    } else if (t.includes('video')) {
+                        tipoMensagem = 'VIDEO';
+                    } else if (t.includes('document') || t.includes('pdf') || t.includes('arquivo') || t.includes('file')) {
+                        tipoMensagem = 'DOCUMENTO';
+                    }
                 }
-                fs.appendFileSync(logFile, `[PARSER N8N] Mídia detectada: ${tipoMensagem}\n`);
+                fs.appendFileSync(logFile, `[PARSER N8N] Mídia detectada: ${tipoMensagem} do termo: ${partes[2]}\n`);
             }
 
             if (telefone && mensagemTexto && mensagemTexto !== 'undefined' && mensagemTexto !== '') {
