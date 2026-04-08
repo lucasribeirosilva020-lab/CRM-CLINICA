@@ -8,7 +8,11 @@ import fs from 'fs';
 export async function POST(req: NextRequest) {
     try {
         const rawBody = await req.json();
-        // fs.appendFileSync('/tmp/webhook_monitor.log', `[${new Date().toISOString()}] RAW: ${JSON.stringify(rawBody)}\n`);
+        const logFile = 'WEBHOOK_DEBUG.log';
+        const timestamp = new Date().toISOString();
+        
+        fs.appendFileSync(logFile, `\n--- [${timestamp}] NOVO WEBHOOK RECEBIDO ---\n`);
+        fs.appendFileSync(logFile, `PAYLOAD: ${JSON.stringify(rawBody)}\n`);
         
         let body = rawBody;
         
@@ -44,9 +48,12 @@ export async function POST(req: NextRequest) {
         }
 
         if (!clinicaId) {
+            fs.appendFileSync(logFile, `[ERRO] Clínica não identificada\n`);
             console.warn(`[WEBHOOK REJEITADO] Clínica não identificada. Payload: ${JSON.stringify(body).slice(0, 200)}...`);
             return NextResponse.json({ ok: true, error: 'Clínica não identificada' });
         }
+        
+        fs.appendFileSync(logFile, `CLINICA_ID: ${clinicaId}\n`);
 
         const date = new Date();
         const nowDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString();
@@ -85,9 +92,24 @@ export async function POST(req: NextRequest) {
         if (numeroRaw && mensagemRaw) {
             const telefone = String(numeroRaw).replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
             const mensagemTexto = String(mensagemRaw);
+            
+            let tipoMensagem = 'TEXTO';
+            
+            // Lógica de Parser para mídias vindas do n8n
+            if (mensagemTexto.startsWith('[MEDIA_URL]|')) {
+                const partes = mensagemTexto.split('|');
+                if (partes.length >= 3) {
+                    const tipoDetectado = partes[2].toUpperCase();
+                    if (tipoDetectado.includes('IMAGE') || tipoDetectado.includes('IMAGEM')) tipoMensagem = 'IMAGEM';
+                    else if (tipoDetectado.includes('AUDIO')) tipoMensagem = 'AUDIO';
+                    else if (tipoDetectado.includes('VIDEO')) tipoMensagem = 'VIDEO';
+                    else if (tipoDetectado.includes('DOCUMENT') || tipoDetectado.includes('PDF')) tipoMensagem = 'DOCUMENTO';
+                }
+                fs.appendFileSync(logFile, `[PARSER N8N] Mídia detectada: ${tipoMensagem}\n`);
+            }
 
             if (telefone && mensagemTexto && mensagemTexto !== 'undefined' && mensagemTexto !== '') {
-                console.log(`[WEBHOOK] Salvando mensagem: ${telefone}. fromMe: ${isFromMe}. Texto: ${mensagemTexto.slice(0, 50)}...`);
+                console.log(`[WEBHOOK] Salvando mensagem: ${telefone}. Tipo: ${tipoMensagem}. Texto: ${mensagemTexto.slice(0, 50)}...`);
 
                 // Busca lead e conversa
                 const { data: lead } = await supabaseAdmin
@@ -127,7 +149,7 @@ export async function POST(req: NextRequest) {
                         clinicaId,
                         conversaId: conversa.id,
                         conteudo: mensagemTexto,
-                        tipo: 'TEXTO',
+                        tipo: tipoMensagem,
                         de: isFromMe ? 'sistema' : telefone,
                         lida: isFromMe,
                         timestamp: nowDate
@@ -136,7 +158,7 @@ export async function POST(req: NextRequest) {
                     const isPerdido = !isFromMe && (['perdido', 'ltv_perdidos', 'desqualificado'].includes(conversa.kanbanAtenStat) || ['perdido', 'ltv_perdidos', 'desqualificado'].includes(conversa.kanbanVendStat));
                     
                     await supabaseAdmin.from('Conversa').update({
-                        ultimaMensagem: mensagemTexto,
+                        ultimaMensagem: mensagemTexto.includes('[MEDIA_URL]') ? '[Mídia]' : mensagemTexto,
                         ultimaMensagemAt: nowDate,
                         updatedAt: nowDate,
                         ...(!isFromMe && { naoLidas: (conversa.naoLidas || 0) + 1 }),
@@ -156,6 +178,7 @@ export async function POST(req: NextRequest) {
                 const isMsgFromMe = msg.fromMe || msg.key?.fromMe || (msg.pushName?.includes('Sofia'));
                 const messageId = msg.key?.id || msg.id || `uaz_${Date.now()}`;
                 
+                fs.appendFileSync(logFile, `[UAZ NATIVE] Processando mensagem ID: ${messageId}, FromMe: ${isMsgFromMe}\n`);
                 console.log(`[WEBHOOK NATIVE] Processando. fromMe: ${isMsgFromMe}, ID: ${messageId}`);
 
                 const remoteJid = msg.key?.remoteJid || msg.remoteJid || msg.from;
@@ -172,6 +195,7 @@ export async function POST(req: NextRequest) {
                     urlMedia = msgData.imageMessage.url || '';
                     conteudo = msgData.imageMessage.caption || conteudo || '[Imagem]';
                     nomeArquivo = 'imagem.jpg';
+                    fs.appendFileSync(logFile, `[UAZ NATIVE] Tipo: IMAGEM, URL: ${urlMedia}\n`);
                 } else if (msgData.audioMessage) {
                     tipo = 'AUDIO';
                     urlMedia = msgData.audioMessage.url || '';
@@ -199,15 +223,20 @@ export async function POST(req: NextRequest) {
                 }
 
                 // 1. Busca ou cria o lead pelo telefone
-                const { data: lead } = await supabaseAdmin
+                const { data: lead, error: leadError } = await supabaseAdmin
                     .from('Lead')
                     .select('id, nome, conversa:Conversa(id, naoLidas, kanbanAtenStat, kanbanVendStat)')
                     .eq('clinicaId', clinicaId)
                     .eq('telefone', telefone)
                     .single();
 
+                if (leadError) fs.appendFileSync(logFile, `[UAZ NATIVE] Erro ao buscar lead (${telefone}): ${leadError.message}\n`);
+                
                 let leadId = lead?.id;
                 let conversa = (lead?.conversa as any)?.[0];
+                
+                if (leadId) fs.appendFileSync(logFile, `[UAZ NATIVE] Lead encontrado: ${leadId}, Conversa: ${conversa?.id || 'NÃO'}\n`);
+                else fs.appendFileSync(logFile, `[UAZ NATIVE] Lead NÃO encontrado para o telefone: ${telefone}\n`);
 
                 if (!leadId) {
                     const nome = msg.pushName || msg.sender?.name || telefone;
@@ -304,6 +333,8 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ ok: true });
     } catch (error) {
+        const logFile = 'WEBHOOK_DEBUG.log';
+        fs.appendFileSync(logFile, `[CRITICAL ERROR] ${error instanceof Error ? error.message : String(error)}\n`);
         console.error('[UAZAPI WEBHOOK ERROR]', error);
         return NextResponse.json({ ok: false }, { status: 500 });
     }
