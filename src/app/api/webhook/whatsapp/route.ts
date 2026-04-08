@@ -101,14 +101,28 @@ export async function POST(req: NextRequest) {
             let urlMedia = urlMediaDireta || '';
             
             // Prioridade 1: Campos diretos (JSON limpo do n8n)
-            if (urlMediaDireta && tipoMidiaDireto) {
-                const t = String(tipoMidiaDireto).toLowerCase();
-                if (t.includes('image') || t.includes('imagem') || t.includes('foto')) tipoMensagem = 'IMAGEM';
-                else if (t.includes('audio') || t.includes('ptt')) tipoMensagem = 'AUDIO';
-                else if (t.includes('video')) tipoMensagem = 'VIDEO';
-                else if (t.includes('document') || t.includes('pdf') || t.includes('arquivo')) tipoMensagem = 'DOCUMENTO';
+            if (urlMediaDireta) {
+                const t = String(tipoMidiaDireto || '').toLowerCase();
                 
-                fs.appendFileSync(logFile, `[PARSER JSON] Mídia direta detectada: ${tipoMensagem}\n`);
+                // Se tiver URL, não pode ser TEXTO. Vamos tentar identificar o tipo real.
+                if (t.includes('image') || t.includes('imagem') || t.includes('foto')) {
+                    tipoMensagem = 'IMAGEM';
+                } else if (t.includes('audio') || t.includes('ptt') || t.includes('voice') || t.includes('opus')) {
+                    tipoMensagem = 'AUDIO';
+                } else if (t.includes('video')) {
+                    tipoMensagem = 'VIDEO';
+                } else if (t.includes('document') || t.includes('pdf') || t.includes('arquivo') || t.includes('file')) {
+                    tipoMensagem = 'DOCUMENTO';
+                } else {
+                    // Fallback: Se o n8n enviou "text" mas tem URL, tentamos descobrir pela extensão ou assumimos IMAGEM
+                    if (urlMediaDireta.match(/\.(jpg|jpeg|png|webp|gif|bmp)/i)) tipoMensagem = 'IMAGEM';
+                    else if (urlMediaDireta.match(/\.(mp3|ogg|wav|opus|m4a|aac)/i)) tipoMensagem = 'AUDIO';
+                    else if (urlMediaDireta.match(/\.(mp4|avi|mov|mkv|wmv)/i)) tipoMensagem = 'VIDEO';
+                    else if (urlMediaDireta.match(/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|zip|rar)/i)) tipoMensagem = 'DOCUMENTO';
+                    else tipoMensagem = 'IMAGEM'; // Assume imagem se for desconhecido mas tiver URL
+                }
+                
+                fs.appendFileSync(logFile, `[PARSER JSON ROBUSTO] Mídia detectada: ${tipoMensagem} (Input n8n: ${tipoMidiaDireto})\n`);
             } 
             // Prioridade 2: Fallback para o formato [MEDIA_URL] (Legado)
             else if (mensagemTexto.startsWith('[MEDIA_URL]|')) {
